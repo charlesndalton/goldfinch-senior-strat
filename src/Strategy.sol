@@ -13,10 +13,18 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 
 // Import interfaces for many popular DeFi projects, or add your own!
 //import "./interfaces/<protocol>/<Interface>.sol";
+import "./interfaces/Curve/IStableSwapExchange.sol";
+import "./interfaces/Goldfinch/ISeniorPool.sol";
 
 contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
+
+    IStableSwapExchange internal constant curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
+    ISeniorPool internal constant seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
+
+    uint256 public maxSlippage = 30; // Default to 30 bips
+    uint256 internal constant MAX_BIPS = 10_000;
 
     // solhint-disable-next-line no-empty-blocks
     constructor(address _vault) BaseStrategy(_vault) {
@@ -29,8 +37,7 @@ contract Strategy is BaseStrategy {
     // ******** OVERRIDE THESE METHODS FROM BASE CONTRACT ************
 
     function name() external view override returns (string memory) {
-        // Add your own name here, suggestion e.g. "StrategyCreamYFI"
-        return "Strategy<ProtocolName><TokenType>";
+        return "StrategyGoldfinchUSDC";
     }
 
     function estimatedTotalAssets() public view override returns (uint256) {
@@ -53,10 +60,23 @@ contract Strategy is BaseStrategy {
         // NOTE: Should try to free up at least `_debtOutstanding` of underlying position
     }
 
-    // solhint-disable-next-line no-empty-blocks
+    // Swap USDC -> FIDU if slippage conditions permit
     function adjustPosition(uint256 _debtOutstanding) internal override {
-        // TODO: Do something to invest excess `want` tokens (from the Vault) into your positions
-        // NOTE: Try to adjust positions so that `_debtOutstanding` can be freed up on *next* harvest (not immediately)
+        uint256 _liquidWant = balanceOfWant();
+
+        if (_liquidWant > _debtOutstanding) {
+            uint256 _amountToInvest = _liquidWant - _debtOutstanding;
+
+            uint256 _expectedOut = curvePool.get_dy(1, 0, _amountToInvest);
+            uint256 _expectedValueOut = (_expectedOut * seniorPool.sharePrice()) / 1e18;
+            uint256 _allowedSlippageValue = (_amountToInvest * maxSlippage) / MAX_BIPS; // Amount of value it's okay to lose in slippage on USDC -> FIDU
+
+            if (_amountToInvest - _allowedSlippageValue > _expectedValueOut) { // Too much slippage
+                return;
+            } 
+
+            curvePool.exchange_underlying(1, 0, _amountToInvest, _expectedOut);
+        }
     }
 
     function liquidatePosition(uint256 _amountNeeded)
@@ -137,5 +157,28 @@ contract Strategy is BaseStrategy {
     {
         // TODO create an accurate price oracle
         return _amtInWei;
+    }
+
+    // _checkAllowance adapted from https://github.com/therealmonoloco/liquity-stability-pool-strategy/blob/1fb0b00d24e0f5621f1e57def98c26900d551089/contracts/Strategy.sol#L316
+
+    function _checkAllowance(
+        address _spender,
+        address _token,
+        uint256 _amount
+    ) internal {
+        uint256 _currentAllowance = IERC20(_token).allowance(
+            address(this),
+            _spender
+        );
+        if (_currentAllowance < _amount) {
+            IERC20(_token).safeIncreaseAllowance(
+                _spender,
+                _amount - _currentAllowance
+            );
+        }
+    }
+
+    function balanceOfWant() public view returns (uint256) {
+        return want.balanceOf(address(this));
     }
 }
