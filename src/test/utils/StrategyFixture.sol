@@ -53,7 +53,7 @@ contract StrategyFixture is ExtendedTest {
         _setTokenAddrs();
 
         // Choose a token from the tokenAddrs mapping, see _setTokenAddrs for options
-        string memory token = "DAI";
+        string memory token = "USDC";
         weth = IERC20(tokenAddrs["WETH"]);
         want = IERC20(tokenAddrs[token]);
 
