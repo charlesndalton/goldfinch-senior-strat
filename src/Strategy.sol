@@ -16,6 +16,8 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 //import "./interfaces/<protocol>/<Interface>.sol";
 import "./interfaces/Curve/IStableSwapExchange.sol";
 import "./interfaces/Goldfinch/ISeniorPool.sol";
+import "./interfaces/Goldfinch/IStakingRewards.sol";
+import "./ySwap/ITradeFactory.sol";
 
 contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
@@ -24,7 +26,9 @@ contract Strategy is BaseStrategy {
     IStableSwapExchange internal constant curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
     ISeniorPool internal constant seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
     IERC20 internal constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
+    IERC20 public GFI;   
 
+    address public tradeFactory = address(0);
     uint256 public maxSlippage; 
     uint256 internal constant MAX_BIPS = 10_000;
 
@@ -192,6 +196,29 @@ contract Strategy is BaseStrategy {
         _swapFiduToWant(fiduAmount, force);
     }
 
+    // ----------------- YSWAPS FUNCTIONS ---------------------
+
+    function setTradeFactory(address _tradeFactory) external onlyGovernance {
+        if (tradeFactory != address(0)) {
+            _removeTradeFactoryPermissions();
+        }
+
+        // approve and set up trade factory
+        tokeToken.safeApprove(_tradeFactory, type(uint256).max);
+        ITradeFactory tf = ITradeFactory(_tradeFactory);
+        tf.enable(address(tokeToken), address(want));
+        tradeFactory = _tradeFactory;
+    }
+
+    function removeTradeFactoryPermissions() external onlyEmergencyAuthorized {
+        _removeTradeFactoryPermissions();
+    }
+
+    function _removeTradeFactoryPermissions() internal {
+        tokeToken.safeApprove(tradeFactory, 0);
+        tradeFactory = address(0);
+    }
+
     // ------- HELPER AND UTILITY FUNCTIONS -------
 
     function _swapFiduToWant(uint256 _fiduAmount, bool _force) internal {
@@ -220,6 +247,25 @@ contract Strategy is BaseStrategy {
         _checkAllowance(address(curvePool), address(want), _amount); 
 
         curvePool.exchange_underlying(1, 0, _amount, _expectedOut); 
+    }
+
+    function _stakeFidu(uint256 _amountToStake) internal {
+        IStakingRewards.stake(_amountToStake);
+    }
+
+    function _unstakeFidu(uint256 _amountToUnstake, tokenId) internal {
+        _getTokenId(); // need to fetch tokenId
+        IStakingRewards.stake(tokenId, _amountToStake);
+    }
+
+    function pendingGFIRewards() public view returns (uint256) {
+        return
+            _getTokenId(); // need to fetch tokenId
+            IStakingRewards.claimableRewards(tokenId);
+    }
+
+    function _claimRewards() internal {
+        IStakingRewards.getReward(tokenID);
     }
 
     // _checkAllowance adapted from https://github.com/therealmonoloco/liquity-stability-pool-strategy/blob/1fb0b00d24e0f5621f1e57def98c26900d551089/contracts/Strategy.sol#L316
