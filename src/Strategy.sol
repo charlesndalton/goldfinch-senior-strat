@@ -13,7 +13,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 // Import interfaces for many popular DeFi projects, or add your own!
-// import "./interfaces/<protocol>/<Interface>.sol";
 import "./interfaces/Curve/IStableSwapExchange.sol";
 import "./interfaces/Goldfinch/ISeniorPool.sol";
 import "./interfaces/Goldfinch/IStakingRewards.sol";
@@ -27,8 +26,7 @@ contract Strategy is BaseStrategy {
     ISeniorPool internal constant seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
     IStakingRewards internal constant stakingRewards = IStakingRewards(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822); // check address
     IERC20 internal constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
-    IERC20 public GFI;   
-
+    
     address public tradeFactory = address(0);
     uint256 public maxSlippage; 
     uint256 internal constant MAX_BIPS = 10_000;
@@ -60,9 +58,11 @@ contract Strategy is BaseStrategy {
             uint256 _debtPayment
         )
     {
+        require(tradeFactory != address(0), "Trade factory must be set.");
+        
         // First, claim any rewards.
 
-        // TODO
+        _claimRewards(); // GFI rewards sold by yswap?
 
         // Second, run initial profit + loss calculations.
 
@@ -100,8 +100,13 @@ contract Strategy is BaseStrategy {
 
         if (_liquidWant > _debtOutstanding) {
             uint256 _amountToInvest = _liquidWant - _debtOutstanding;
-
             _swapWantToFidu(_amountToInvest);
+        }
+
+        // stake any unstaked Fidu
+        uint256 unstakedBalance = balanceOfFidu();
+        if (unstakedBalance > 0) {
+            _stakeFidu(unstakedBalance);
         }
     }
 
@@ -110,9 +115,6 @@ contract Strategy is BaseStrategy {
         override
         returns (uint256 _liquidatedAmount, uint256 _loss)
     {
-        // Maintains invariant `want.balanceOf(this) >= _liquidatedAmount`
-        // Maintains invariant `_liquidatedAmount + _loss <= _amountNeeded`
-
         uint256 _liquidWant = balanceOfWant();
 
         if (_liquidWant >= _amountNeeded) {
@@ -200,30 +202,31 @@ contract Strategy is BaseStrategy {
 
     // ----------------- YSWAPS FUNCTIONS ---------------------
 
-    // function setTradeFactory(address _tradeFactory) external onlyGovernance {
-    //     if (tradeFactory != address(0)) {
-    //         _removeTradeFactoryPermissions();
-    //     }
+    function setTradeFactory(address _tradeFactory) external onlyGovernance {
+        if (tradeFactory != address(0)) {
+            _removeTradeFactoryPermissions();
+        }
 
-    //     // approve and set up trade factory
-    //     tokeToken.safeApprove(_tradeFactory, type(uint256).max);
-    //     ITradeFactory tf = ITradeFactory(_tradeFactory);
-    //     tf.enable(address(tokeToken), address(want));
-    //     tradeFactory = _tradeFactory;
-    // }
+        // approve and set up trade factory
+        // tokeToken.safeApprove(_tradeFactory, type(uint256).max);
+        // ITradeFactory tf = ITradeFactory(_tradeFactory);
+        // tf.enable(address(tokeToken), address(want));
+        // tradeFactory = _tradeFactory;
+    }
 
-    // function removeTradeFactoryPermissions() external onlyEmergencyAuthorized {
-    //     _removeTradeFactoryPermissions();
-    // }
+    function removeTradeFactoryPermissions() external onlyEmergencyAuthorized {
+        _removeTradeFactoryPermissions();
+    }
 
-    // function _removeTradeFactoryPermissions() internal {
-    //     tokeToken.safeApprove(tradeFactory, 0);
-    //     tradeFactory = address(0);
-    // }
+    function _removeTradeFactoryPermissions() internal {
+        // tokeToken.safeApprove(tradeFactory, 0);
+        tradeFactory = address(0);
+    }
 
     // ------- HELPER AND UTILITY FUNCTIONS -------
 
     function _swapFiduToWant(uint256 _fiduAmount, bool _force) internal {
+        // TODO need to unstake first
         uint256 _fiduValueInWant = (_fiduAmount * seniorPool.sharePrice()) / 1e30;
         uint256 _expectedOut = curvePool.get_dy(0, 1, _fiduAmount);
         uint256 _allowedSlippageLoss = (_fiduValueInWant * maxSlippage) / MAX_BIPS;
@@ -253,19 +256,24 @@ contract Strategy is BaseStrategy {
 
     function _stakeFidu(uint256 _amountToStake) internal {
         stakingRewards.stake(_amountToStake);
-        // TO-DO
-        // need to fetch associated tokenId and store it in tokenIdList[]
+        // TODO: need to fetch associated tokenId and store it in tokenIdList[]
         // import "../external/ERC721PresetMinterPauserAutoId.sol";
         // _tokenIdTracker.increment();
         // tokenId = _tokenIdTracker.current();
     }
 
-    function _unstakeFidu(uint256) internal {
+    function _unstakeAllFidu() internal {
         for (uint i=0; i<tokenIdList.length; i++) {
             uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(i);
             stakingRewards.unstake(i, _amountToUnstake);
             }
     }
+
+    function _unstakeFidu(uint256 _tokenId) internal {
+        uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(_tokenId);
+        stakingRewards.unstake(_tokenId, _amountToUnstake);
+        }
+    
     
     function _claimRewards() internal {
         for (uint i=0; i<tokenIdList.length; i++) { // check claimable GFI for each tokenId
