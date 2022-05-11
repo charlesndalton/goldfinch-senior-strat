@@ -9,6 +9,7 @@ import {BaseStrategy, StrategyParams} from "@yearnvaults/contracts/BaseStrategy.
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {Counters} from "@openzeppelin/contracts/utils/Counters.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -21,12 +22,15 @@ import "./interfaces/ySwap/ITradeFactory.sol";
 contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
+    using Counters for Counters.Counter;
 
     IStableSwapExchange internal constant curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
     ISeniorPool internal constant seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
-    IStakingRewards internal constant stakingRewards = IStakingRewards(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822); // check address
+    IStakingRewards internal constant stakingRewards = IStakingRewards(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3); // check address
     IERC20 internal constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
-    
+
+    Counters.Counter tokenIdCounter;
+ 
     address public tradeFactory = address(0);
     uint256 public maxSlippage; 
     uint256 internal constant MAX_BIPS = 10_000;
@@ -39,6 +43,7 @@ contract Strategy is BaseStrategy {
         // profitFactor = 100;
         // debtThreshold = 0;
         maxSlippage = 30; // Default to 30 bips
+        tokenIdCounter = stakingRewards._tokenIdTracker();
     }
 
     function name() external view override returns (string memory) {
@@ -256,6 +261,9 @@ contract Strategy is BaseStrategy {
 
     function _stakeFidu(uint256 _amountToStake) internal {
         stakingRewards.stake(_amountToStake);
+        uint256 _tokenId = tokenIdCounter.current(); // Hack: they don't return the token ID from the stake function, so we need to calculate it
+
+        // uint256 _tokenId = _tokenIdTracker.current();
         // TODO: need to fetch associated tokenId and store it in tokenIdList[]
         // import "../external/ERC721PresetMinterPauserAutoId.sol";
         // _tokenIdTracker.increment();

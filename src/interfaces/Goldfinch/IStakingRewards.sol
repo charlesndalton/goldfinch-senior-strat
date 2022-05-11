@@ -2,6 +2,7 @@
 
 pragma solidity ^0.8.12;
 pragma experimental ABIEncoderV2;
+import {Counters} from "@openzeppelin/contracts/utils/Counters.sol";
 
 interface IStakingRewards {
 
@@ -35,4 +36,6 @@ interface IStakingRewards {
     // @param tokenId A staking position token ID
     // @return Amount of staked tokens denominated in `stakingToken().decimals()`
     function stakedBalanceOf(uint256 tokenId) external view returns (uint256);
+
+    function _tokenIdTracker() external view returns (Counters.Counter memory);
   }
