@@ -24,8 +24,15 @@ interface IStakingRewards {
     /// @param tokenId A staking position token ID
     function getReward(uint256 tokenId) external;
 
-      /// @notice Returns the rewards claimable by a given position token at the most recent checkpoint, taking into
-      /// account vesting schedule.
-      /// @return rewards Amount of rewards denominated in `rewardsToken()`
+    /// @notice Returns the rewards claimable by a given position token at the most recent checkpoint, taking into
+    /// account vesting schedule.
+    /// @return rewards Amount of rewards denominated in `rewardsToken()`
     function claimableRewards(uint256 tokenId)  external;
-}
+
+    /// @notice Returns the staked balance of a given position token.
+    /// @dev The value returned is the bare amount, not the effective amount. The bare amount represents
+    ///   the number of tokens the user has staked for a given position.
+    /// @param tokenId A staking position token ID
+    /// @return Amount of staked tokens denominated in `stakingToken().decimals()`
+    function stakedBalanceOf(uint256 tokenId) external;
+  }

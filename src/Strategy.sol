@@ -31,6 +31,7 @@ contract Strategy is BaseStrategy {
     address public tradeFactory = address(0);
     uint256 public maxSlippage; 
     uint256 internal constant MAX_BIPS = 10_000;
+    uint internal tokenIdList[];
 
     // solhint-disable-next-line no-empty-blocks
     constructor(address _vault) BaseStrategy(_vault) {
@@ -251,21 +252,24 @@ contract Strategy is BaseStrategy {
 
     function _stakeFidu(uint256 _amountToStake) internal {
         IStakingRewards.stake(_amountToStake);
+        // need to fetch associated tokenId and store it in tokenIdList[]
+        // https://github.com/goldfinch-eng/mmakeono/blob/4da1db611fac62f4fb3e7e49469bfed72df0fd1a/packages/protocol/contracts/rewards/StakingRewards.sol#L552-L553
+        // https://github.com/goldfinch-eng/mono/blob/4da1db611fac62f4fb3e7e49469bfed72df0fd1a/packages/protocol/contracts/external/ERC721PresetMinterPauserAutoId.sol#L48
     }
 
     function _unstakeFidu(uint256 _amountToUnstake, tokenId) internal {
-        _getTokenId(); // need to fetch tokenId
-        IStakingRewards.stake(tokenId, _amountToStake);
+        for (uint i=0; i<tokenIdList.length; i++) {
+            uint256 _amountToUnstake = IStakingRewards.stakedBalanceOf(i);
+            IStakingRewards.unstake(i, _amountToUnstake);
+            }
     }
-
-    function pendingGFIRewards() public view returns (uint256) {
-        return
-            _getTokenId(); // need to fetch tokenId
-            IStakingRewards.claimableRewards(tokenId);
-    }
-
+    
     function _claimRewards() internal {
-        IStakingRewards.getReward(tokenID);
+        for (uint i=0; i<tokenIdList.length; i++) { // check claimable GFI for each tokenId
+            if (IStakingRewards.claimableRewards(i) != 0) { 
+                IStakingRewards.getReward(i); // claim GFI
+            }
+        }
     }
 
     // _checkAllowance adapted from https://github.com/therealmonoloco/liquity-stability-pool-strategy/blob/1fb0b00d24e0f5621f1e57def98c26900d551089/contracts/Strategy.sol#L316
