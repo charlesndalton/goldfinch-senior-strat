@@ -13,11 +13,11 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 // Import interfaces for many popular DeFi projects, or add your own!
-//import "./interfaces/<protocol>/<Interface>.sol";
+// import "./interfaces/<protocol>/<Interface>.sol";
 import "./interfaces/Curve/IStableSwapExchange.sol";
 import "./interfaces/Goldfinch/ISeniorPool.sol";
 import "./interfaces/Goldfinch/IStakingRewards.sol";
-import "./ySwap/ITradeFactory.sol";
+import "./interfaces/ySwap/ITradeFactory.sol";
 
 contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
@@ -25,13 +25,14 @@ contract Strategy is BaseStrategy {
 
     IStableSwapExchange internal constant curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
     ISeniorPool internal constant seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
+    IStakingRewards internal constant stakingRewards = IStakingRewards(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822); // check address
     IERC20 internal constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
     IERC20 public GFI;   
 
     address public tradeFactory = address(0);
     uint256 public maxSlippage; 
     uint256 internal constant MAX_BIPS = 10_000;
-    uint internal tokenIdList[];
+    uint256[] internal tokenIdList;
 
     // solhint-disable-next-line no-empty-blocks
     constructor(address _vault) BaseStrategy(_vault) {
@@ -199,26 +200,26 @@ contract Strategy is BaseStrategy {
 
     // ----------------- YSWAPS FUNCTIONS ---------------------
 
-    function setTradeFactory(address _tradeFactory) external onlyGovernance {
-        if (tradeFactory != address(0)) {
-            _removeTradeFactoryPermissions();
-        }
+    // function setTradeFactory(address _tradeFactory) external onlyGovernance {
+    //     if (tradeFactory != address(0)) {
+    //         _removeTradeFactoryPermissions();
+    //     }
 
-        // approve and set up trade factory
-        tokeToken.safeApprove(_tradeFactory, type(uint256).max);
-        ITradeFactory tf = ITradeFactory(_tradeFactory);
-        tf.enable(address(tokeToken), address(want));
-        tradeFactory = _tradeFactory;
-    }
+    //     // approve and set up trade factory
+    //     tokeToken.safeApprove(_tradeFactory, type(uint256).max);
+    //     ITradeFactory tf = ITradeFactory(_tradeFactory);
+    //     tf.enable(address(tokeToken), address(want));
+    //     tradeFactory = _tradeFactory;
+    // }
 
-    function removeTradeFactoryPermissions() external onlyEmergencyAuthorized {
-        _removeTradeFactoryPermissions();
-    }
+    // function removeTradeFactoryPermissions() external onlyEmergencyAuthorized {
+    //     _removeTradeFactoryPermissions();
+    // }
 
-    function _removeTradeFactoryPermissions() internal {
-        tokeToken.safeApprove(tradeFactory, 0);
-        tradeFactory = address(0);
-    }
+    // function _removeTradeFactoryPermissions() internal {
+    //     tokeToken.safeApprove(tradeFactory, 0);
+    //     tradeFactory = address(0);
+    // }
 
     // ------- HELPER AND UTILITY FUNCTIONS -------
 
@@ -251,23 +252,25 @@ contract Strategy is BaseStrategy {
     }
 
     function _stakeFidu(uint256 _amountToStake) internal {
-        IStakingRewards.stake(_amountToStake);
+        stakingRewards.stake(_amountToStake);
+        // TO-DO
         // need to fetch associated tokenId and store it in tokenIdList[]
-        // https://github.com/goldfinch-eng/mmakeono/blob/4da1db611fac62f4fb3e7e49469bfed72df0fd1a/packages/protocol/contracts/rewards/StakingRewards.sol#L552-L553
-        // https://github.com/goldfinch-eng/mono/blob/4da1db611fac62f4fb3e7e49469bfed72df0fd1a/packages/protocol/contracts/external/ERC721PresetMinterPauserAutoId.sol#L48
+        // import "../external/ERC721PresetMinterPauserAutoId.sol";
+        // _tokenIdTracker.increment();
+        // tokenId = _tokenIdTracker.current();
     }
 
-    function _unstakeFidu(uint256 _amountToUnstake, tokenId) internal {
+    function _unstakeFidu(uint256) internal {
         for (uint i=0; i<tokenIdList.length; i++) {
-            uint256 _amountToUnstake = IStakingRewards.stakedBalanceOf(i);
-            IStakingRewards.unstake(i, _amountToUnstake);
+            uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(i);
+            stakingRewards.unstake(i, _amountToUnstake);
             }
     }
     
     function _claimRewards() internal {
         for (uint i=0; i<tokenIdList.length; i++) { // check claimable GFI for each tokenId
-            if (IStakingRewards.claimableRewards(i) != 0) { 
-                IStakingRewards.getReward(i); // claim GFI
+            if (stakingRewards.claimableRewards(i) != 0) { 
+                stakingRewards.getReward(i); // claim GFI
             }
         }
     }
