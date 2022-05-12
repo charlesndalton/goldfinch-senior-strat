@@ -32,10 +32,9 @@ contract Strategy is BaseStrategy {
     IERC20 internal constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
     IERC20 internal constant GFI = IERC20(0xdab396cCF3d84Cf2D07C4454e10C8A6F5b008D2b);
 
+    // NFT position for staked Fidu
     Counters.Counter tokenIdCounter;
- 
-    // Creating a set to store _tokenId'S
-    EnumerableSet.UintSet private _tokenIdList;
+    EnumerableSet.UintSet private _tokenIdList; // Creating a set to store _tokenId'S
 
     address public tradeFactory = address(0);
     uint256 public maxSlippage; 
@@ -149,28 +148,23 @@ contract Strategy is BaseStrategy {
         return balanceOfWant();
     }
 
-    function prepareMigration(address _newStrategy) internal virtual;
-
-    /**
-     * @notice
-     *  Transfers all `want` from this Strategy to `_newStrategy`.
-     *
-     *  This may only be called by the Vault.
-     * @dev
-     * The new Strategy's Vault must be the same as this Strategy's Vault.
-     *  The migration process should be carefully performed to make sure all
-     * the assets are migrated to the new address, which should have never
-     * interacted with the vault before.
-     * @param _newStrategy The Strategy to migrate to.
-     */
-     
-
-    function migrate(address _newStrategy) external {
-        require(msg.sender == address(vault));
-        require(BaseStrategy(_newStrategy).vault() == vault);
-        prepareMigration(_newStrategy);
-        want.safeTransfer(_newStrategy, want.balanceOf(address(this)));
-    }
+    function prepareMigration(address _newStrategy) internal override {
+            // TODO: Transfer any non-`want` tokens to the new strategy
+            // NOTE: `migrate` will automatically forward all `want` in this strategy to the new one
+        }
+        // Override this to add all tokens/tokenized positions this contract manages
+        // on a *persistent* basis (e.g. not just for swapping back to want ephemerally)
+        // NOTE: Do *not* include `want`, already included in `sweep` below
+        //
+        // Example:
+        //
+        //    function protectedTokens() internal override view returns (address[] memory) {
+        //      address[] memory protected = new address[](3);
+        //      protected[0] = tokenA;
+        //      protected[1] = tokenB;
+        //      protected[2] = tokenC;
+        //      return protected;
+        //    }
 
     function protectedTokens()
         internal
@@ -196,7 +190,6 @@ contract Strategy is BaseStrategy {
      * @param _amtInWei The amount (in wei/1e-18 ETH) to convert to `want`
      * @return The amount in `want` of `_amtInEth` converted to `want`
      **/
-
     function ethToWant(uint256 _amtInWei)
         public
         view
