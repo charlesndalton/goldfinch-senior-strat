@@ -24,17 +24,18 @@ contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
     using Counters for Counters.Counter;
-    using EnumerableSet for EnumerableSet.AddressSet;
+    using EnumerableSet for EnumerableSet.UintSet;
 
     IStableSwapExchange internal constant curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
     ISeniorPool internal constant seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
     IStakingRewards internal constant stakingRewards = IStakingRewards(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3);
     IERC20 internal constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
+    IERC20 internal constant GFI = IERC20(0xdab396cCF3d84Cf2D07C4454e10C8A6F5b008D2b);
 
     Counters.Counter tokenIdCounter;
  
     // Creating a set to store _tokenId'S
-    EnumerableSet.AddressSet private _tokenIdList;
+    EnumerableSet.UintSet private _tokenIdList;
 
     address public tradeFactory = address(0);
     uint256 public maxSlippage; 
@@ -204,6 +205,7 @@ contract Strategy is BaseStrategy {
         returns (uint256)
     {
         // TODO create an accurate price oracle
+
         return _amtInWei;
     }
 
@@ -214,18 +216,16 @@ contract Strategy is BaseStrategy {
     }
 
     // ----------------- YSWAPS FUNCTIONS ---------------------
-    // TODO needs fixing
-
     function setTradeFactory(address _tradeFactory) external onlyGovernance {
         if (tradeFactory != address(0)) {
             _removeTradeFactoryPermissions();
         }
 
         // approve and set up trade factory
-        // tokeToken.safeApprove(_tradeFactory, type(uint256).max);
-        // ITradeFactory tf = ITradeFactory(_tradeFactory);
-        // tf.enable(address(tokeToken), address(want));
-        // tradeFactory = _tradeFactory;
+        GFI.safeApprove(_tradeFactory, type(uint256).max);
+        ITradeFactory tf = ITradeFactory(_tradeFactory);
+        tf.enable(address(GFI), address(want));
+        tradeFactory = _tradeFactory;
     }
 
     function removeTradeFactoryPermissions() external onlyEmergencyAuthorized {
@@ -233,7 +233,7 @@ contract Strategy is BaseStrategy {
     }
 
     function _removeTradeFactoryPermissions() internal {
-        // tokeToken.safeApprove(tradeFactory, 0);
+        GFI.safeApprove(tradeFactory, 0);
         tradeFactory = address(0);
     }
 
@@ -244,12 +244,13 @@ contract Strategy is BaseStrategy {
         // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
         uint256 _FiduToUnstake = balanceOfFidu() - _fiduAmount;
         while (balanceOfFidu() > _fiduAmount){
-            for (uint i=0; i<EnumerableSet(_tokenIdList).length; i++) {
-                if (stakingRewards.stakedBalanceOf(i) <= _FiduToUnstake) {
-                    stakingRewards.unstake(i, _FiduToUnstake);
-                     EnumerableSet(_tokenIdList, i).remove; // remove that tokenId from the list
+            for (uint256 i=0; i<_tokenIdList.length(); i++) {
+                uint256 x = _tokenIdList.at(i);
+                if (stakingRewards.stakedBalanceOf(x) <= _FiduToUnstake) {
+                    stakingRewards.unstake(x, _FiduToUnstake);
+                    _tokenIdList.remove(x); // remove tokenId from the list
                 } else { // partial unstake
-                    stakingRewards.unstake(i, _FiduToUnstake); }
+                    stakingRewards.unstake(x, _FiduToUnstake); }
             _FiduToUnstake = balanceOfFidu() - _fiduAmount; // is there a better way to update the remaining amount to unstake?
             }    
         }
@@ -284,24 +285,18 @@ contract Strategy is BaseStrategy {
     function _stakeFidu(uint256 _amountToStake) internal {
         stakingRewards.stake(_amountToStake);
         uint256 _tokenId = tokenIdCounter.current(); // Hack: they don't return the token ID from the stake function, so we need to calculate it
-        EnumerableSet.add(_tokenIdList, _tokenId); // each time we stake Fidu, a new _tokenId is created
+        _tokenIdList.add(_tokenId); // each time we stake Fidu, a new _tokenId is created
     }
 
     function _unstakeAllFidu() internal {
-        for (uint i=0; i<EnumerableSet(_tokenIdList).length; i++) {
+        for (uint i=0; i<_tokenIdList.length(); i++) {
             uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(i);
             stakingRewards.unstake(i, _amountToUnstake);
             }
     }
 
-    // not used
-    // function _unstakeFidu(uint256 _tokenId, uint256 _amountToUnstake) internal {
-    //     uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(_tokenId);
-    //     stakingRewards.unstake(_tokenId, _amountToUnstake);
-    //     }
-    
     function _claimRewards() internal {
-        for (uint i=0; i<EnumerableSet(_tokenIdList).length; i++) { // check claimable GFI for each tokenId
+        for (uint i=0; i<_tokenIdList.length(); i++) { // check claimable GFI for each tokenId
             if (stakingRewards.claimableRewards(i) != 0) { 
                 stakingRewards.getReward(i); // claim GFI
             }
