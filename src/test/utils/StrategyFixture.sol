@@ -11,6 +11,7 @@ import "forge-std/console.sol";
 
 // NOTE: if the name of the strat or file changes this needs to be updated
 import {Strategy} from "../../Strategy.sol";
+import {ITradeFactory} from "../../interfaces/ySwap/ITradeFactory.sol";
 
 // Artifact paths for deploying from the deps folder, assumes that the command is run from
 // the project root.
@@ -36,6 +37,9 @@ contract StrategyFixture is ExtendedTest {
     address public management = address(5);
     address public strategist = address(6);
     address public keeper = address(7);
+
+    ITradeFactory public constant tradeFactory = ITradeFactory(0x7BAF843e06095f68F4990Ca50161C2C4E4e01ec6);
+    address public constant yMechSafe = 0x2C01B4AD51a67E2d8F02208F54dF9aC4c0B778B6;
 
     uint256 public minFuzzAmt;
     // @dev maximum amount of want tokens deposited based on @maxDollarNotional
@@ -130,6 +134,13 @@ contract StrategyFixture is ExtendedTest {
     // Deploys a strategy
     function deployStrategy(address _vault) public returns (address) {
         Strategy _strategy = new Strategy(_vault);
+
+        vm.startPrank(yMechSafe);
+        tradeFactory.grantRole(tradeFactory.STRATEGY(), address(_strategy));
+        vm.stopPrank();
+
+        vm.prank(gov);
+        _strategy.setTradeFactory(address(tradeFactory));
 
         return address(_strategy);
     }
