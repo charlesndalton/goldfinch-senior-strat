@@ -72,7 +72,7 @@ contract Strategy is BaseStrategy {
         
         // First, claim any rewards.
 
-        _claimRewards(); // GFI rewards sold by yswap?
+        _claimRewards();
 
         // Second, run initial profit + loss calculations.
 
@@ -149,29 +149,28 @@ contract Strategy is BaseStrategy {
         return balanceOfWant();
     }
 
-    // NOTE: Can override `tendTrigger` and `harvestTrigger` if necessary
-    // solhint-disable-next-line no-empty-blocks
-    function prepareMigration(address _newStrategy) internal override {
-        // TODO: Transfer any non-`want` tokens to the new strategy
-        // NOTE: `migrate` will automatically forward all `want` in this strategy to the new one
-    }
+    function prepareMigration(address _newStrategy) internal virtual;
 
-    // Override this to add all tokens/tokenized positions this contract manages
-    // on a *persistent* basis (e.g. not just for swapping back to want ephemerally)
-    // NOTE: Do *not* include `want`, already included in `sweep` below
-    //
-    // Example:
-    //
-    //    function protectedTokens() internal override view returns (address[] memory) {
-    //      address[] memory protected = new address[](3);
-    //      protected[0] = tokenA;
-    //      protected[1] = tokenB;
-    //      protected[2] = tokenC;
-    //      return protected;
-    //    }
-    // function migrate(address _newStrategy) external {
-    //     // TODO: 
-    // }
+    /**
+     * @notice
+     *  Transfers all `want` from this Strategy to `_newStrategy`.
+     *
+     *  This may only be called by the Vault.
+     * @dev
+     * The new Strategy's Vault must be the same as this Strategy's Vault.
+     *  The migration process should be carefully performed to make sure all
+     * the assets are migrated to the new address, which should have never
+     * interacted with the vault before.
+     * @param _newStrategy The Strategy to migrate to.
+     */
+     
+
+    function migrate(address _newStrategy) external {
+        require(msg.sender == address(vault));
+        require(BaseStrategy(_newStrategy).vault() == vault);
+        prepareMigration(_newStrategy);
+        want.safeTransfer(_newStrategy, want.balanceOf(address(this)));
+    }
 
     function protectedTokens()
         internal
@@ -197,6 +196,7 @@ contract Strategy is BaseStrategy {
      * @param _amtInWei The amount (in wei/1e-18 ETH) to convert to `want`
      * @return The amount in `want` of `_amtInEth` converted to `want`
      **/
+
     function ethToWant(uint256 _amtInWei)
         public
         view
@@ -204,8 +204,6 @@ contract Strategy is BaseStrategy {
         override
         returns (uint256)
     {
-        // TODO create an accurate price oracle
-
         return _amtInWei;
     }
 
