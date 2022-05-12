@@ -12,6 +12,7 @@ import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Counters} from "@openzeppelin/contracts/utils/Counters.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 // Import interfaces for many popular DeFi projects, or add your own!
 import "./interfaces/Curve/IStableSwapExchange.sol";
@@ -23,18 +24,21 @@ contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
     using Counters for Counters.Counter;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
     IStableSwapExchange internal constant curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
     ISeniorPool internal constant seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
-    IStakingRewards internal constant stakingRewards = IStakingRewards(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3); // check address
+    IStakingRewards internal constant stakingRewards = IStakingRewards(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3);
     IERC20 internal constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
 
     Counters.Counter tokenIdCounter;
  
+    // Creating a set to store _tokenId'S
+    EnumerableSet.AddressSet private _tokenIdList;
+
     address public tradeFactory = address(0);
     uint256 public maxSlippage; 
     uint256 internal constant MAX_BIPS = 10_000;
-    uint256[] internal tokenIdList;
 
     // solhint-disable-next-line no-empty-blocks
     constructor(address _vault) BaseStrategy(_vault) {
@@ -164,6 +168,10 @@ contract Strategy is BaseStrategy {
     //      protected[2] = tokenC;
     //      return protected;
     //    }
+    // function migrate(address _newStrategy) external {
+    //     // TODO: 
+    // }
+
     function protectedTokens()
         internal
         view
@@ -206,6 +214,7 @@ contract Strategy is BaseStrategy {
     }
 
     // ----------------- YSWAPS FUNCTIONS ---------------------
+    // TODO needs fixing
 
     function setTradeFactory(address _tradeFactory) external onlyGovernance {
         if (tradeFactory != address(0)) {
@@ -231,7 +240,20 @@ contract Strategy is BaseStrategy {
     // ------- HELPER AND UTILITY FUNCTIONS -------
 
     function _swapFiduToWant(uint256 _fiduAmount, bool _force) internal {
-        // TODO need to unstake first
+
+        // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
+        uint256 _FiduToUnstake = balanceOfFidu() - _fiduAmount;
+        while (balanceOfFidu() > _fiduAmount){
+            for (uint i=0; i<EnumerableSet(_tokenIdList).length; i++) {
+                if (stakingRewards.stakedBalanceOf(i) <= _FiduToUnstake) {
+                    stakingRewards.unstake(i, _FiduToUnstake);
+                     EnumerableSet(_tokenIdList, i).remove; // remove that tokenId from the list
+                } else { // partial unstake
+                    stakingRewards.unstake(i, _FiduToUnstake); }
+            _FiduToUnstake = balanceOfFidu() - _fiduAmount; // is there a better way to update the remaining amount to unstake?
+            }    
+        }
+
         uint256 _fiduValueInWant = (_fiduAmount * seniorPool.sharePrice()) / 1e30;
         uint256 _expectedOut = curvePool.get_dy(0, 1, _fiduAmount);
         uint256 _allowedSlippageLoss = (_fiduValueInWant * maxSlippage) / MAX_BIPS;
@@ -262,29 +284,24 @@ contract Strategy is BaseStrategy {
     function _stakeFidu(uint256 _amountToStake) internal {
         stakingRewards.stake(_amountToStake);
         uint256 _tokenId = tokenIdCounter.current(); // Hack: they don't return the token ID from the stake function, so we need to calculate it
-
-        // uint256 _tokenId = _tokenIdTracker.current();
-        // TODO: need to fetch associated tokenId and store it in tokenIdList[]
-        // import "../external/ERC721PresetMinterPauserAutoId.sol";
-        // _tokenIdTracker.increment();
-        // tokenId = _tokenIdTracker.current();
+        EnumerableSet.add(_tokenIdList, _tokenId); // each time we stake Fidu, a new _tokenId is created
     }
 
     function _unstakeAllFidu() internal {
-        for (uint i=0; i<tokenIdList.length; i++) {
+        for (uint i=0; i<EnumerableSet(_tokenIdList).length; i++) {
             uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(i);
             stakingRewards.unstake(i, _amountToUnstake);
             }
     }
 
-    function _unstakeFidu(uint256 _tokenId) internal {
-        uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(_tokenId);
-        stakingRewards.unstake(_tokenId, _amountToUnstake);
-        }
-    
+    // not used
+    // function _unstakeFidu(uint256 _tokenId, uint256 _amountToUnstake) internal {
+    //     uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(_tokenId);
+    //     stakingRewards.unstake(_tokenId, _amountToUnstake);
+    //     }
     
     function _claimRewards() internal {
-        for (uint i=0; i<tokenIdList.length; i++) { // check claimable GFI for each tokenId
+        for (uint i=0; i<EnumerableSet(_tokenIdList).length; i++) { // check claimable GFI for each tokenId
             if (stakingRewards.claimableRewards(i) != 0) { 
                 stakingRewards.getReward(i); // claim GFI
             }
