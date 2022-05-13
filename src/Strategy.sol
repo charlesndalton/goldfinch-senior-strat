@@ -165,6 +165,12 @@ contract Strategy is BaseStrategy {
         //      protected[2] = tokenC;
         //      return protected;
         //    }
+    function migrate(address _newStrategy) virtual external override  {
+        require(msg.sender == address(vault));
+        require(BaseStrategy(_newStrategy).vault() == vault);
+        prepareMigration(_newStrategy);
+        want.safeTransfer(_newStrategy, want.balanceOf(address(this)));
+    }
 
     function protectedTokens()
         internal
