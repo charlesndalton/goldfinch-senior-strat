@@ -166,12 +166,6 @@ contract Strategy is BaseStrategy {
         //      protected[2] = tokenC;
         //      return protected;
         //    }
-    function migrate(address _newStrategy) virtual external override  {
-        require(msg.sender == address(vault));
-        require(BaseStrategy(_newStrategy).vault() == vault);
-        prepareMigration(_newStrategy);
-        want.safeTransfer(_newStrategy, want.balanceOf(address(this)));
-    }
 
     function protectedTokens()
         internal
@@ -290,6 +284,7 @@ contract Strategy is BaseStrategy {
     }
 
     function _stakeFidu(uint256 _amountToStake) internal {
+        _checkAllowance(address(stakingRewards), address(FIDU), _amountToStake);
         stakingRewards.stake(_amountToStake);
         uint256 _tokenId = tokenIdCounter.current(); // Hack: they don't return the token ID from the stake function, so we need to calculate it
         _tokenIdList.add(_tokenId); // each time we stake Fidu, a new _tokenId is created

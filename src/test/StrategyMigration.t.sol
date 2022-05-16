@@ -24,7 +24,7 @@ contract StrategyMigrationTest is StrategyFixture {
         vm.prank(user);
         vault.deposit(_amount);
         skip(1);
-        vm.prank(strategist); // error here
+        vm.prank(strategist);
         strategy.harvest();
         assertRelApproxEq(strategy.estimatedTotalAssets(), _amount, DELTA);
 

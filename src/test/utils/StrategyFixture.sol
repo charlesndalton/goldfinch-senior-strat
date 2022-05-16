@@ -96,6 +96,12 @@ contract StrategyFixture is ExtendedTest {
         vm.label(management, "Management");
         vm.label(strategist, "Strategist");
         vm.label(keeper, "Keeper");
+        vm.label(address(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822), "Senior Pool");
+        vm.label(address(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF), "Fidu Token");
+        vm.label(address(0xdab396cCF3d84Cf2D07C4454e10C8A6F5b008D2b), "GFI Token");
+        vm.label(address(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3), "Staking rewards");
+        vm.label(address(0x80aa1a80a30055DAA084E599836532F3e58c95E2), "Curve Pool - swap Fidu");
+
 
         // do here additional setup
     }
