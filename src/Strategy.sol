@@ -48,7 +48,6 @@ contract Strategy is BaseStrategy {
         // profitFactor = 100;
         // debtThreshold = 0;
         maxSlippage = 30; // Default to 30 bips
-        tokenIdCounter = stakingRewards._tokenIdTracker();
     }
 
     function name() external view override returns (string memory) {
@@ -56,7 +55,11 @@ contract Strategy is BaseStrategy {
     }
 
     function estimatedTotalAssets() public view override returns (uint256) {
-        return balanceOfWant() + ((balanceOfFIDU() * seniorPool.sharePrice()) / 1e18) / 1e12; // FIDU -> USDC decimals
+        uint256 _totalStakedFIDU;
+        for (uint i=0; i<_tokenIdList.length(); i++) {
+            _totalStakedFIDU = _totalStakedFIDU + stakingRewards.stakedBalanceOf(_tokenIdList.at(i));
+        }
+        return balanceOfWant() + (((balanceOfFIDU() + _totalStakedFIDU)* seniorPool.sharePrice()) / 1e18) / 1e12; // FIDU -> USDC decimals
     }
 
     function prepareReturn(uint256 _debtOutstanding)
@@ -71,11 +74,9 @@ contract Strategy is BaseStrategy {
         require(tradeFactory != address(0), "Trade factory must be set.");
         
         // First, claim any rewards.
-
         _claimRewards();
 
         // Second, run initial profit + loss calculations.
-
         uint256 _totalAssets = estimatedTotalAssets();
         uint256 _totalDebt = vault.strategies(address(this)).totalDebt;
 
@@ -87,7 +88,6 @@ contract Strategy is BaseStrategy {
         }
 
         // Third, free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
-
         (uint256 _amountFreed, uint256 _liquidationLoss) =
             liquidatePosition(_debtOutstanding + _profit);
 
@@ -150,9 +150,10 @@ contract Strategy is BaseStrategy {
     }
 
     function prepareMigration(address _newStrategy) internal override {
+        _unstakeAllFidu();
+        _claimRewards();
         uint256 _FIDUToTransfer = balanceOfFIDU();
         uint256 _GFIToTransfer = balanceOfGFI();
-        _unstakeAllFidu();
         FIDU.safeTransfer(_newStrategy, _FIDUToTransfer);
         GFI.safeTransfer(_newStrategy, _GFIToTransfer);
         }
@@ -236,7 +237,6 @@ contract Strategy is BaseStrategy {
     // ------- HELPER AND UTILITY FUNCTIONS -------
 
     function _swapFiduToWant(uint256 _fiduAmount, bool _force) internal {
-
         // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
         uint256 _FiduToUnstake = balanceOfFIDU() - _fiduAmount;
         while (balanceOfFIDU() > _fiduAmount){
@@ -252,7 +252,7 @@ contract Strategy is BaseStrategy {
         }
 
         uint256 _fiduValueInWant = (_fiduAmount * seniorPool.sharePrice()) / 1e30;
-        uint256 _expectedOut = curvePool.get_dy(0, 1, _fiduAmount);
+        uint256 _expectedOut = curvePool.get_dy(0, 1, _fiduAmount); // (!) TRACE ERROR HERE (!)
         uint256 _allowedSlippageLoss = (_fiduValueInWant * maxSlippage) / MAX_BIPS;
 
         if (!_force && _fiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
@@ -291,21 +291,25 @@ contract Strategy is BaseStrategy {
         _checkAllowance(address(stakingRewards), address(FIDU), _amountToStake);
         FIDU.approve(address(stakingRewards), _amountToStake);
         stakingRewards.stake(_amountToStake, 0);
+        updateTokenIdCounter();
         uint256 _tokenId = tokenIdCounter.current(); // Hack: they don't return the token ID from the stake function, so we need to calculate it
         _tokenIdList.add(_tokenId); // each time we stake Fidu, a new _tokenId is created
     }
 
     function _unstakeAllFidu() internal {
         for (uint i=0; i<_tokenIdList.length(); i++) {
-            uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(i);
-            stakingRewards.unstake(i, _amountToUnstake);
+            uint256 x = _tokenIdList.at(i);
+            uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(x);
+            stakingRewards.unstake(x, _amountToUnstake);
+            _tokenIdList.remove(x);
             }
     }
 
     function _claimRewards() internal {
         for (uint i=0; i<_tokenIdList.length(); i++) { // check claimable GFI for each tokenId
-            if (stakingRewards.claimableRewards(i) != 0) { 
-                stakingRewards.getReward(i); // claim GFI
+            uint256 x = _tokenIdList.at(i);
+            if (stakingRewards.claimableRewards(x) != 0) { 
+                stakingRewards.getReward(x); // claim GFI
             }
         }
     }
@@ -327,6 +331,10 @@ contract Strategy is BaseStrategy {
                 _amount - _currentAllowance
             );
         }
+    }
+    
+    function updateTokenIdCounter() internal {
+        tokenIdCounter = stakingRewards._tokenIdTracker();
     }
 
     function balanceOfWant() public view returns (uint256) {
