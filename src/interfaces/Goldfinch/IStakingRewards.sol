@@ -11,7 +11,7 @@ interface IStakingRewards {
     //   to claim rewards or unstake your tokens respectively. Rewards vest over a schedule.
     // @dev This function checkpoints rewards.
     // @param amount The amount of `stakingToken()` to stake
-    function stake(uint256 amount) external;
+    function stake(uint256 amount, uint8 positionType) external;
 
     // @notice Unstake an amount of `stakingToken()` associated with a given position and transfer to msg.sender.
     //   Unvested rewards will be forfeited, but remaining staked amount will continue to accrue rewards.

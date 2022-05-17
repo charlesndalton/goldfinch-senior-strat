@@ -286,7 +286,7 @@ contract Strategy is BaseStrategy {
     function _stakeFidu(uint256 _amountToStake) internal {
         _checkAllowance(address(stakingRewards), address(FIDU), _amountToStake);
         FIDU.approve(address(stakingRewards), _amountToStake);
-        stakingRewards.stake(_amountToStake);
+        stakingRewards.stake(_amountToStake, 0);
         uint256 _tokenId = tokenIdCounter.current(); // Hack: they don't return the token ID from the stake function, so we need to calculate it
         _tokenIdList.add(_tokenId); // each time we stake Fidu, a new _tokenId is created
     }
