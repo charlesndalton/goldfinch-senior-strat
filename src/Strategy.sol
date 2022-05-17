@@ -56,7 +56,7 @@ contract Strategy is BaseStrategy {
     }
 
     function estimatedTotalAssets() public view override returns (uint256) {
-        return balanceOfWant() + ((balanceOfFidu() * seniorPool.sharePrice()) / 1e18) / 1e12; // FIDU -> USDC decimals
+        return balanceOfWant() + ((balanceOfFIDU() * seniorPool.sharePrice()) / 1e18) / 1e12; // FIDU -> USDC decimals
     }
 
     function prepareReturn(uint256 _debtOutstanding)
@@ -114,7 +114,7 @@ contract Strategy is BaseStrategy {
         }
 
         // stake any unstaked Fidu
-        uint256 unstakedBalance = balanceOfFidu();
+        uint256 unstakedBalance = balanceOfFIDU();
         if (unstakedBalance > 0) {
             _stakeFidu(unstakedBalance);
         }
@@ -131,7 +131,7 @@ contract Strategy is BaseStrategy {
             return (_amountNeeded, 0);
         }
 
-        uint256 _fiduToSwap = Math.min((_amountNeeded * 1e30) / seniorPool.sharePrice(), balanceOfFidu()); // 18 decimals for the share price & 12 decimals for USDC -> FIDU 
+        uint256 _fiduToSwap = Math.min((_amountNeeded * 1e30) / seniorPool.sharePrice(), balanceOfFIDU()); // 18 decimals for the share price & 12 decimals for USDC -> FIDU 
         _swapFiduToWant(_fiduToSwap, false);
 
         _liquidWant = balanceOfWant();
@@ -145,14 +145,18 @@ contract Strategy is BaseStrategy {
     }
 
     function liquidateAllPositions() internal override returns (uint256) {
-        _swapFiduToWant(balanceOfFidu(), true);
+        _swapFiduToWant(balanceOfFIDU(), true);
         return balanceOfWant();
     }
 
     function prepareMigration(address _newStrategy) internal override {
-            // TODO: Transfer any non-`want` tokens to the new strategy
-            // NOTE: `migrate` will automatically forward all `want` in this strategy to the new one
+        uint256 _FIDUToTransfer = balanceOfFIDU();
+        uint256 _GFIToTransfer = balanceOfGFI();
+        _unstakeAllFidu();
+        FIDU.safeTransfer(_newStrategy, _FIDUToTransfer);
+        GFI.safeTransfer(_newStrategy, _GFIToTransfer);
         }
+
         // Override this to add all tokens/tokenized positions this contract manages
         // on a *persistent* basis (e.g. not just for swapping back to want ephemerally)
         // NOTE: Do *not* include `want`, already included in `sweep` below
@@ -234,8 +238,8 @@ contract Strategy is BaseStrategy {
     function _swapFiduToWant(uint256 _fiduAmount, bool _force) internal {
 
         // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
-        uint256 _FiduToUnstake = balanceOfFidu() - _fiduAmount;
-        while (balanceOfFidu() > _fiduAmount){
+        uint256 _FiduToUnstake = balanceOfFIDU() - _fiduAmount;
+        while (balanceOfFIDU() > _fiduAmount){
             for (uint256 i=0; i<_tokenIdList.length(); i++) {
                 uint256 x = _tokenIdList.at(i);
                 if (stakingRewards.stakedBalanceOf(x) <= _FiduToUnstake) {
@@ -243,7 +247,7 @@ contract Strategy is BaseStrategy {
                     _tokenIdList.remove(x); // remove tokenId from the list
                 } else { // partial unstake
                     stakingRewards.unstake(x, _FiduToUnstake); }
-            _FiduToUnstake = balanceOfFidu() - _fiduAmount; // is there a better way to update the remaining amount to unstake?
+            _FiduToUnstake = balanceOfFIDU() - _fiduAmount; // is there a better way to update the remaining amount to unstake?
             }    
         }
 
@@ -329,7 +333,11 @@ contract Strategy is BaseStrategy {
         return want.balanceOf(address(this));
     }
 
-    function balanceOfFidu() public view returns (uint256) {
+    function balanceOfFIDU() public view returns (uint256) {
         return FIDU.balanceOf(address(this));
+    }
+
+    function balanceOfGFI() public view returns (uint256) {
+        return GFI.balanceOf(address(this));
     }
 }
