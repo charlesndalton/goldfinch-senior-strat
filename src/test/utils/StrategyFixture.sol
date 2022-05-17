@@ -51,7 +51,7 @@ contract StrategyFixture is ExtendedTest {
     // @dev used for non-fuzz tests to test large amounts
     uint256 public bigAmount;
     // Used for integer approximation
-    uint256 public constant DELTA = 10**5;
+    uint256 public constant DELTA = 10**1;
 
     function setUp() public virtual {
         _setTokenPrices();
@@ -100,7 +100,7 @@ contract StrategyFixture is ExtendedTest {
         vm.label(address(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF), "Fidu Token");
         vm.label(address(0xdab396cCF3d84Cf2D07C4454e10C8A6F5b008D2b), "GFI Token");
         vm.label(address(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3), "Staking rewards");
-        vm.label(address(0x80aa1a80a30055DAA084E599836532F3e58c95E2), "Curve Pool - swap Fidu");
+        vm.label(address(0x80aa1a80a30055DAA084E599836532F3e58c95E2), "Curve Pool - Swap Fidu");
 
 
         // do here additional setup

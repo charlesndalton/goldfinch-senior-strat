@@ -8,7 +8,7 @@ make: *** No rule to make target 'all'.  Stop.
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Tue May 17 13:26:08 2022
+# Make data base, printed on Tue May 17 15:01:54 2022
 
 # Variables
 
@@ -23,7 +23,7 @@ SSH_AGENT_LAUNCHER = gnome-keyring
 # environment
 GJS_DEBUG_OUTPUT = stderr
 # environment
-VSCODE_IPC_HOOK_EXTHOST = /run/user/1000/vscode-ipc-83494019-d7ec-450f-a4d5-40d04b17f75e.sock
+VSCODE_IPC_HOOK_EXTHOST = /run/user/1000/vscode-ipc-d6a52fde-4ec1-4b67-b7e4-4c6bdfad96b5.sock
 # environment
 VSCODE_CWD = /home/simon
 # environment
@@ -69,7 +69,7 @@ CURDIR := /home/simon/Documents/Yearn/goldfinch-senior-strat
 # environment
 VSCODE_PIPE_LOGGING = true
 # environment
-APPLICATION_INSIGHTS_NO_DIAGNOSTIC_CHANNEL = true
+APPLICATION_INSIGHTS_NO_DIAGNOSTIC_CHANNEL = 1
 # environment
 LESSOPEN = | /usr/bin/lesspipe %s
 # automatic
@@ -95,7 +95,7 @@ MAKEFILE_LIST := Makefile .env
 # environment
 VSCODE_VERBOSE_LOGGING = true
 # environment
-VSCODE_PID = 32009
+VSCODE_PID = 50672
 # environment
 XDG_SESSION_TYPE = x11
 # automatic
@@ -189,7 +189,7 @@ FTM_RPC_URL = https://rpcapi.fantom.network
 # environment
 MANAGERPID = 2469
 # environment
-GIO_LAUNCHED_DESKTOP_FILE_PID = 32009
+GIO_LAUNCHED_DESKTOP_FILE_PID = 50672
 # environment
 _ = /usr/share/code/code
 # environment
@@ -281,6 +281,7 @@ Makefile:
 clean:
 #  Implicit rule search has not been done.
 #  Modification time never checked.
+ 
 #  File has not been updated.
 #  recipe to execute (from 'Makefile', line 19):
 	 forge clean
@@ -315,7 +316,6 @@ trace-local:
 # Not a target:
 all:
 #  Command line target.
- 
 #  Implicit rule search has been done.
 #  File does not exist.
 #  File has not been updated.
@@ -362,6 +362,6 @@ test-single:
 # strcache performance: lookups = 56 / hit rate = 30%
 # hash-table stats:
 # Load=39/8192=0%, Rehash=0, Collisions=0/56=0%
-# Finished Make data base on Tue May 17 13:26:08 2022
+# Finished Make data base on Tue May 17 15:01:54 2022
 
  
