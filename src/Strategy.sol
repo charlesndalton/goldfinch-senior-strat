@@ -30,11 +30,9 @@ contract Strategy is BaseStrategy {
     IStableSwapExchange internal constant curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
     ISeniorPool internal constant seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
     IStakingRewards internal constant stakingRewards = IStakingRewards(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3);
-    IERC20 internal constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
-    IERC20 internal constant GFI = IERC20(0xdab396cCF3d84Cf2D07C4454e10C8A6F5b008D2b);
-
-    // NFT position for staked Fidu
-    Counters.Counter tokenIdCounter;
+    IERC20 internal constant Fidu = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
+    IERC20 internal constant GFI = IERC20(0xdab396cCF3d84Cf2D07C4454e10C8A6F5b008D2b); 
+    Counters.Counter tokenIdCounter; // NFT position for staked Fidu
     EnumerableSet.UintSet private _tokenIdList; // Creating a set to store _tokenId'S
 
     address public tradeFactory = address(0);
@@ -55,11 +53,11 @@ contract Strategy is BaseStrategy {
     }
 
     function estimatedTotalAssets() public view override returns (uint256) {
-        uint256 _totalStakedFIDU;
+        uint256 _totalStakedFidu;
         for (uint i=0; i<_tokenIdList.length(); i++) {
-            _totalStakedFIDU = _totalStakedFIDU + stakingRewards.stakedBalanceOf(_tokenIdList.at(i));
+            _totalStakedFidu = _totalStakedFidu + stakingRewards.stakedBalanceOf(_tokenIdList.at(i));
         }
-        return balanceOfWant() + (((balanceOfFIDU() + _totalStakedFIDU)* seniorPool.sharePrice()) / 1e18) / 1e12; // FIDU -> USDC decimals
+        return balanceOfWant() + (((balanceOfFidu() + _totalStakedFidu)* seniorPool.sharePrice()) / 1e18) / 1e12; // Fidu -> USDC decimals
     }
 
     function prepareReturn(uint256 _debtOutstanding)
@@ -90,9 +88,7 @@ contract Strategy is BaseStrategy {
         // Third, free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
         (uint256 _amountFreed, uint256 _liquidationLoss) =
             liquidatePosition(_debtOutstanding + _profit);
-
         _loss = _loss + _liquidationLoss;
-
         _debtPayment = Math.min(_debtOutstanding, _amountFreed);
 
         if (_loss > _profit) {
@@ -104,17 +100,15 @@ contract Strategy is BaseStrategy {
         }
     }
 
-    // Swap USDC -> FIDU if slippage conditions permit
+    // Swap USDC -> Fidu if slippage conditions permit
     function adjustPosition(uint256 _debtOutstanding) internal override {
         uint256 _liquidWant = balanceOfWant();
-
         if (_liquidWant > _debtOutstanding) {
             uint256 _amountToInvest = _liquidWant - _debtOutstanding;
             _swapWantToFidu(_amountToInvest);
         }
-
         // stake any unstaked Fidu
-        uint256 unstakedBalance = balanceOfFIDU();
+        uint256 unstakedBalance = balanceOfFidu();
         if (unstakedBalance > 0) {
             _stakeFidu(unstakedBalance);
         }
@@ -131,9 +125,8 @@ contract Strategy is BaseStrategy {
             return (_amountNeeded, 0);
         }
 
-        uint256 _fiduToSwap = Math.min((_amountNeeded * 1e30) / seniorPool.sharePrice(), balanceOfFIDU()); // 18 decimals for the share price & 12 decimals for USDC -> FIDU 
-        _swapFiduToWant(_fiduToSwap, false);
-
+        uint256 _FiduToSwap = Math.min((_amountNeeded * 1e30) / seniorPool.sharePrice(), balanceOfFidu()); // 18 decimals for the share price & 12 decimals for USDC -> Fidu 
+        _swapFiduToWant(_FiduToSwap, false);
         _liquidWant = balanceOfWant();
 
         if (_liquidWant >= _amountNeeded) {
@@ -145,32 +138,18 @@ contract Strategy is BaseStrategy {
     }
 
     function liquidateAllPositions() internal override returns (uint256) {
-        _swapFiduToWant(balanceOfFIDU(), true);
+        _swapFiduToWant(balanceOfFidu(), true);
         return balanceOfWant();
     }
 
     function prepareMigration(address _newStrategy) internal override {
         _unstakeAllFidu();
         _claimRewards();
-        uint256 _FIDUToTransfer = balanceOfFIDU();
+        uint256 _FiduToTransfer = balanceOfFidu();
         uint256 _GFIToTransfer = balanceOfGFI();
-        FIDU.safeTransfer(_newStrategy, _FIDUToTransfer);
+        Fidu.safeTransfer(_newStrategy, _FiduToTransfer);
         GFI.safeTransfer(_newStrategy, _GFIToTransfer);
         }
-
-        // Override this to add all tokens/tokenized positions this contract manages
-        // on a *persistent* basis (e.g. not just for swapping back to want ephemerally)
-        // NOTE: Do *not* include `want`, already included in `sweep` below
-        //
-        // Example:
-        //
-        //    function protectedTokens() internal override view returns (address[] memory) {
-        //      address[] memory protected = new address[](3);
-        //      protected[0] = tokenA;
-        //      protected[1] = tokenB;
-        //      protected[2] = tokenC;
-        //      return protected;
-        //    }
 
     function protectedTokens()
         internal
@@ -181,21 +160,6 @@ contract Strategy is BaseStrategy {
     {
 
     }
-
-    /**
-     * @notice
-     *  Provide an accurate conversion from `_amtInWei` (denominated in wei)
-     *  to `want` (using the native decimal characteristics of `want`).
-     * @dev
-     *  Care must be taken when working with decimals to assure that the conversion
-     *  is compatible. As an example:
-     *
-     *      given 1e17 wei (0.1 ETH) as input, and want is USDC (6 decimals),
-     *      with USDC/ETH = 1800, this should give back 1800000000 (180 USDC)
-     *
-     * @param _amtInWei The amount (in wei/1e-18 ETH) to convert to `want`
-     * @return The amount in `want` of `_amtInEth` converted to `want`
-     **/
     function ethToWant(uint256 _amtInWei)
         public
         view
@@ -208,8 +172,8 @@ contract Strategy is BaseStrategy {
 
     // ----------- MANAGEMENT FUNCTIONS -----------
 
-    function swapFiduToWant(uint256 fiduAmount, bool force) external onlyVaultManagers {
-        _swapFiduToWant(fiduAmount, force);
+    function swapFiduToWant(uint256 FiduAmount, bool force) external onlyVaultManagers {
+        _swapFiduToWant(FiduAmount, force);
     }
 
     // ----------------- YSWAPS FUNCTIONS ---------------------
@@ -218,7 +182,7 @@ contract Strategy is BaseStrategy {
             _removeTradeFactoryPermissions();
         }
 
-        // approve and set up trade factory
+        // Approve and set up trade factory
         GFI.safeApprove(_tradeFactory, type(uint256).max);
         ITradeFactory tf = ITradeFactory(_tradeFactory);
         tf.enable(address(GFI), address(want));
@@ -236,32 +200,34 @@ contract Strategy is BaseStrategy {
 
     // ------- HELPER AND UTILITY FUNCTIONS -------
 
-    function _swapFiduToWant(uint256 _fiduAmount, bool _force) internal {
-        // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
-        uint256 _FiduToUnstake = balanceOfFIDU() - _fiduAmount;
-        while (balanceOfFIDU() > _fiduAmount){
-            for (uint256 i=0; i<_tokenIdList.length(); i++) {
+    // function length() public {
+    //     return  _tokenIdList.length();
+    // }
+
+    function _swapFiduToWant(uint256 _FiduAmount, bool _force) internal {
+        // Loop through _tokenId's and unstake until we get the amount of _FiduAmount required
+        uint256 _FiduToUnstake = _FiduAmount - balanceOfFidu();
+        while (balanceOfFidu() < _FiduAmount){
+            for (uint256 i=0; i < _tokenIdList.length(); i++) {
                 uint256 x = _tokenIdList.at(i);
-                if (stakingRewards.stakedBalanceOf(x) <= _FiduToUnstake) {
-                    stakingRewards.unstake(x, _FiduToUnstake);
+                if (stakingRewards.stakedBalanceOf(x) <= _FiduToUnstake) { // unstake entirety of this tokenId
+                    stakingRewards.unstake(x, stakingRewards.stakedBalanceOf(x));
                     _tokenIdList.remove(x); // remove tokenId from the list
                 } else { // partial unstake
                     stakingRewards.unstake(x, _FiduToUnstake); }
-            _FiduToUnstake = balanceOfFIDU() - _fiduAmount; // is there a better way to update the remaining amount to unstake?
+                _FiduToUnstake = _FiduAmount - balanceOfFidu(); // is there a better way to update the remaining amount to unstake?
             }    
         }
+        uint256 _FiduValueInWant = (_FiduAmount * seniorPool.sharePrice()) / 1e30;
+        uint256 _expectedOut = curvePool.get_dy(0, 1, _FiduAmount); // (!) TRACE ERROR HERE (!) Harvest, emergency exit, withdraw
+        uint256 _allowedSlippageLoss = (_FiduValueInWant * maxSlippage) / MAX_BIPS;
 
-        uint256 _fiduValueInWant = (_fiduAmount * seniorPool.sharePrice()) / 1e30;
-        uint256 _expectedOut = curvePool.get_dy(0, 1, _fiduAmount); // (!) TRACE ERROR HERE (!)
-        uint256 _allowedSlippageLoss = (_fiduValueInWant * maxSlippage) / MAX_BIPS;
-
-        if (!_force && _fiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
+        if (!_force && _FiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
             return; // Too much slippage
         }
 
-        _checkAllowance(address(curvePool), address(FIDU), _fiduAmount);
-         
-        curvePool.exchange_underlying(0, 1, _fiduAmount, _expectedOut);
+        _checkAllowance(address(curvePool), address(Fidu), _FiduAmount); 
+        curvePool.exchange_underlying(0, 1, _FiduAmount, _expectedOut);
     }
 
     function _swapWantToFidu(uint256 _amount) internal {
@@ -274,7 +240,6 @@ contract Strategy is BaseStrategy {
         }
 
         _checkAllowance(address(curvePool), address(want), _amount); 
-
         curvePool.exchange_underlying(1, 0, _amount, _expectedOut); 
     }
 
@@ -288,8 +253,8 @@ contract Strategy is BaseStrategy {
     }
 
     function _stakeFidu(uint256 _amountToStake) internal {
-        _checkAllowance(address(stakingRewards), address(FIDU), _amountToStake);
-        FIDU.approve(address(stakingRewards), _amountToStake);
+        _checkAllowance(address(stakingRewards), address(Fidu), _amountToStake);
+        Fidu.approve(address(stakingRewards), _amountToStake);
         stakingRewards.stake(_amountToStake, 0);
         updateTokenIdCounter();
         uint256 _tokenId = tokenIdCounter.current(); // Hack: they don't return the token ID from the stake function, so we need to calculate it
@@ -313,8 +278,6 @@ contract Strategy is BaseStrategy {
             }
         }
     }
-
-    // _checkAllowance adapted from https://github.com/therealmonoloco/liquity-stability-pool-strategy/blob/1fb0b00d24e0f5621f1e57def98c26900d551089/contracts/Strategy.sol#L316
 
     function _checkAllowance(
         address _spender,
@@ -341,8 +304,8 @@ contract Strategy is BaseStrategy {
         return want.balanceOf(address(this));
     }
 
-    function balanceOfFIDU() public view returns (uint256) {
-        return FIDU.balanceOf(address(this));
+    function balanceOfFidu() public view returns (uint256) {
+        return Fidu.balanceOf(address(this));
     }
 
     function balanceOfGFI() public view returns (uint256) {

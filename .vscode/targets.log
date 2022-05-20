@@ -1,6 +1,4 @@
 make all --print-data-base --no-builtin-variables --no-builtin-rules --question
-make: *** No rule to make target 'all'.  Stop.
-
 # GNU Make 4.3
 # Built for x86_64-pc-linux-gnu
 # Copyright (C) 1988-2020 Free Software Foundation, Inc.
@@ -8,7 +6,7 @@ make: *** No rule to make target 'all'.  Stop.
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Tue May 17 15:01:54 2022
+# Make data base, printed on Thu May 19 19:49:28 2022
 
 # Variables
 
@@ -23,7 +21,7 @@ SSH_AGENT_LAUNCHER = gnome-keyring
 # environment
 GJS_DEBUG_OUTPUT = stderr
 # environment
-VSCODE_IPC_HOOK_EXTHOST = /run/user/1000/vscode-ipc-d6a52fde-4ec1-4b67-b7e4-4c6bdfad96b5.sock
+VSCODE_IPC_HOOK_EXTHOST = /run/user/1000/vscode-ipc-6b48d425-ad2e-4d89-b844-59d8faa4a510.sock
 # environment
 VSCODE_CWD = /home/simon
 # environment
@@ -51,7 +49,7 @@ VSCODE_LOG_STACK = false
 # automatic
 %F = $(notdir $%)
 # environment
-VSCODE_CODE_CACHE_PATH = /home/simon/.config/Code/CachedData/da15b6fd3ef856477bf6f4fb29ba1b7af717770d
+VSCODE_CODE_CACHE_PATH = /home/simon/.config/Code/CachedData/c3511e6c69bb39013c4a4b7b9566ec1ca73fc4d5
 # environment
 LANG = C
 # makefile (from '.env', line 5)
@@ -95,7 +93,7 @@ MAKEFILE_LIST := Makefile .env
 # environment
 VSCODE_VERBOSE_LOGGING = true
 # environment
-VSCODE_PID = 50672
+VSCODE_PID = 5378
 # environment
 XDG_SESSION_TYPE = x11
 # automatic
@@ -103,7 +101,7 @@ XDG_SESSION_TYPE = x11
 # makefile (from 'Makefile', line 10)
 FORK_URL := https://mainnet.infura.io/v3/19c26afba6a149c6afc0fe2d566d39bb 
 # environment
-SESSION_MANAGER = local/pop-os:@/tmp/.ICE-unix/2702,unix/pop-os:/tmp/.ICE-unix/2702
+SESSION_MANAGER = local/pop-os:@/tmp/.ICE-unix/2460,unix/pop-os:/tmp/.ICE-unix/2460
 # automatic
 *F = $(notdir $*)
 # makefile (from '.env', line 4)
@@ -143,7 +141,7 @@ MAKEFILES :=
 # automatic
 ^F = $(notdir $^)
 # environment
-INVOCATION_ID = c77b5fa823284a96bdfbbd8ce0c8fda1
+INVOCATION_ID = 080cdcb271394971908aaa06f6c5f33e
 # environment
 VSCODE_LOG_NATIVE = false
 # environment
@@ -173,7 +171,7 @@ GIO_LAUNCHED_DESKTOP_FILE = /usr/share/applications/code.desktop
 # makefile
 .DEFAULT_GOAL := update
 # environment
-SYSTEMD_EXEC_PID = 2735
+SYSTEMD_EXEC_PID = 2493
 # makefile (from '.env', line 1)
 ETH_RPC_URL = https://mainnet.infura.io/v3/19c26afba6a149c6afc0fe2d566d39bb
 # environment
@@ -187,9 +185,9 @@ MAKE_VERSION := 4.3
 # makefile (from '.env', line 2)
 FTM_RPC_URL = https://rpcapi.fantom.network
 # environment
-MANAGERPID = 2469
+MANAGERPID = 2177
 # environment
-GIO_LAUNCHED_DESKTOP_FILE_PID = 50672
+GIO_LAUNCHED_DESKTOP_FILE_PID = 5378
 # environment
 _ = /usr/share/code/code
 # environment
@@ -197,7 +195,7 @@ XDG_RUNTIME_DIR = /run/user/1000
 # environment
 GPG_AGENT_INFO = /run/user/1000/gnupg/S.gpg-agent:0:1
 # environment
-JOURNAL_STREAM = 8:40476
+JOURNAL_STREAM = 8:33529
 # environment
 XDG_SESSION_CLASS = user
 # environment
@@ -209,7 +207,7 @@ QT_IM_MODULE = ibus
 # environment
 ELECTRON_RUN_AS_NODE = 1
 # environment
-VSCODE_IPC_HOOK = /run/user/1000/vscode-1a88d1bc-1.67.1-main.sock
+VSCODE_IPC_HOOK = /run/user/1000/vscode-1a88d1bc-1.67.2-main.sock
 # default
 .RECIPEPREFIX := 
 # automatic
@@ -267,21 +265,20 @@ trace-contract:
 # Not a target:
 .env:
 #  Implicit rule search has been done.
-#  Last modified 2022-05-10 20:50:18.605062238
+#  Last modified 2022-05-10 17:50:18.605062238
 #  File has been updated.
 #  Successfully updated.
 
 # Not a target:
 Makefile:
 #  Implicit rule search has been done.
-#  Last modified 2022-05-16 22:18:20.147780448
+#  Last modified 2022-05-17 15:21:29.7687263
 #  File has been updated.
 #  Successfully updated.
 
 clean:
 #  Implicit rule search has not been done.
 #  Modification time never checked.
- 
 #  File has not been updated.
 #  recipe to execute (from 'Makefile', line 19):
 	 forge clean
@@ -299,6 +296,9 @@ test-local:
 #  File has not been updated.
 #  recipe to execute (from 'Makefile', line 17):
 	 forge test
+ 
+make: *** No rule to make target 'all'.  Stop.
+
 
 trace-local:
 #  Implicit rule search has not been done.
@@ -339,14 +339,14 @@ test:
 #  Modification time never checked.
 #  File has not been updated.
 #  recipe to execute (from 'Makefile', line 12):
-	 forge test -vv --fork-url ${FORK_URL} --etherscan-api-key ${ETHERSCAN_API_KEY}
+	 forge test -vvv --fork-url ${FORK_URL} --etherscan-api-key ${ETHERSCAN_API_KEY}
 
 test-single:
 #  Implicit rule search has not been done.
 #  Modification time never checked.
 #  File has not been updated.
 #  recipe to execute (from 'Makefile', line 21):
-	 forge test -vvv --fork-url ${FORK_URL} --etherscan-api-key ${ETHERSCAN_API_KEY} --match-test testMigration
+	 forge test -vvv --fork-url ${FORK_URL} --etherscan-api-key ${ETHERSCAN_API_KEY} --match-test testStrategy
 
 # files hash-table stats:
 # Load=16/1024=2%, Rehash=0, Collisions=0/27=0%
@@ -362,6 +362,6 @@ test-single:
 # strcache performance: lookups = 56 / hit rate = 30%
 # hash-table stats:
 # Load=39/8192=0%, Rehash=0, Collisions=0/56=0%
-# Finished Make data base on Tue May 17 15:01:54 2022
+# Finished Make data base on Thu May 19 19:49:28 2022
 
  

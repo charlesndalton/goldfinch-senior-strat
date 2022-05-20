@@ -1,1 +1,1 @@
-{"buildTargets":["build","clean","snapshot","test","test-contract","test-local","test-single","trace","trace-contract","trace-local","update"],"launchTargets":[],"customConfigurationProvider":{"workspaceBrowse":{"browsePath":[],"compilerArgs":[]},"fileIndex":[]}}
+{"buildTargets":[],"launchTargets":[],"customConfigurationProvider":{"workspaceBrowse":{"browsePath":[],"compilerArgs":[]},"fileIndex":[]}}
