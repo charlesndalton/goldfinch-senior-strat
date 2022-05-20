@@ -200,9 +200,9 @@ contract Strategy is BaseStrategy {
 
     // ------- HELPER AND UTILITY FUNCTIONS -------
 
-    // function length() public {
-    //     return  _tokenIdList.length();
-    // }
+    function length() public returns (uint256){
+        return _tokenIdList.length();
+    }
 
     function _swapFiduToWant(uint256 _FiduAmount, bool _force) internal {
         // Loop through _tokenId's and unstake until we get the amount of _FiduAmount required
@@ -219,7 +219,7 @@ contract Strategy is BaseStrategy {
             }    
         }
         uint256 _FiduValueInWant = (_FiduAmount * seniorPool.sharePrice()) / 1e30;
-        uint256 _expectedOut = curvePool.get_dy(0, 1, _FiduAmount); // (!) TRACE ERROR HERE (!) Harvest, emergency exit, withdraw
+        uint256 _expectedOut = curvePool.get_dy(0, 1, _FiduAmount); 
         uint256 _allowedSlippageLoss = (_FiduValueInWant * maxSlippage) / MAX_BIPS;
 
         if (!_force && _FiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
@@ -231,7 +231,7 @@ contract Strategy is BaseStrategy {
     }
 
     function _swapWantToFidu(uint256 _amount) internal {
-        uint256 _expectedOut = curvePool.get_dy(1, 0, _amount);
+        uint256 _expectedOut = curvePool.get_dy(1, 0, _amount); // (!) TRACE ERROR HERE (!)
         uint256 _expectedValueOut = ((_expectedOut * seniorPool.sharePrice()) / 1e18) / 1e12;
         uint256 _allowedSlippageLoss = (_amount * maxSlippage) / MAX_BIPS;
 
