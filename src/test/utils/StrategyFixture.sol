@@ -45,9 +45,9 @@ contract StrategyFixture is ExtendedTest {
     // @dev maximum amount of want tokens deposited based on @maxDollarNotional
     uint256 public maxFuzzAmt;
     // @dev maximum dollar amount of tokens to be deposited
-    uint256 public maxDollarNotional = 1_000_000;
+    uint256 public maxDollarNotional = 1000_000;
     // @dev maximum dollar amount of tokens for single large amount
-    uint256 public bigDollarNotional = 49_000_000;
+    uint256 public bigDollarNotional = 1000_000;
     // @dev used for non-fuzz tests to test large amounts
     uint256 public bigAmount;
     // Used for integer approximation
@@ -96,15 +96,6 @@ contract StrategyFixture is ExtendedTest {
         vm.label(management, "Management");
         vm.label(strategist, "Strategist");
         vm.label(keeper, "Keeper");
-
-        // 98bcede9 = _tokenIdTracker()
-        // 3ccfd60b = withdraw()
-        // 87269729 = sharePrice()
-        // 70a08231 = balanceOf(address)
-        // bf3759b5 = debtOutstanding()
-        // aa04295f = stakedBalanceOf
-        // 556d6e9f = get_dy()
-        
         vm.label(address(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822), "Senior Pool");
         vm.label(address(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF), "Fidu Token");
         vm.label(address(0xdab396cCF3d84Cf2D07C4454e10C8A6F5b008D2b), "GFI Token");

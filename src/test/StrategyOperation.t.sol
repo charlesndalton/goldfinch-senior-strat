@@ -40,14 +40,15 @@ contract StrategyOperationsTest is StrategyFixture {
         skip(3 minutes);
         vm.prank(strategist);
         strategy.harvest();
-        assertGt(strategy.estimatedTotalAssets(), _amount - (_amount / 1000));
+        assertGe(strategy.estimatedTotalAssets(), _amount - (_amount / 100));
 
         // tend
         vm.prank(strategist);
         strategy.tend();
 
-        vm.prank(user);
-        vault.withdraw();
+        vm.startPrank(user);
+        vault.withdraw(vault.balanceOf(user), user, 600);
+        vm.stopPrank();
 
         assertRelApproxEq(want.balanceOf(user), balanceBefore, DELTA);
     }

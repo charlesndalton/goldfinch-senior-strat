@@ -15,7 +15,7 @@ test-contract :; forge test -vv --fork-url ${FORK_URL} --match-contract $(contra
 trace-contract :; forge test -vvv --fork-url ${FORK_URL} --match-contract $(contract) --etherscan-api-key ${ETHERSCAN_API_KEY}
 # local tests without fork
 test-local  :; forge test
-trace-local  :; forge test -vvv
+trace-local  :; forge test -vvvv
 clean  :; forge clean
 snapshot :; forge snapshot
-test-single :; forge test -vvv --fork-url ${FORK_URL} --etherscan-api-key ${ETHERSCAN_API_KEY} --match-test testStrategy
+test-single :; forge test -vv --fork-url ${FORK_URL} --etherscan-api-key ${ETHERSCAN_API_KEY} --match-test testStrategy
