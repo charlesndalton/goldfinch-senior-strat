@@ -40,7 +40,6 @@ contract Strategy is BaseStrategy {
 
     address public tradeFactory = address(0);
     uint256 public maxSlippage; 
-    uint256 public minSwapAmount; 
     uint256 internal constant MAX_BIPS = 10_000;
 
     // solhint-disable-next-line no-empty-blocks
@@ -49,8 +48,7 @@ contract Strategy is BaseStrategy {
         // maxReportDelay = 6300;
         // profitFactor = 100;
         // debtThreshold = 0;
-        maxSlippage = 190; // Default to 30 bips
-        minSwapAmount = 500;
+        maxSlippage = 60; // Default to 30 bips
     }
 
     function name() external view override returns (string memory) {
@@ -203,22 +201,29 @@ contract Strategy is BaseStrategy {
         uint256 _FiduValueInWant = (_FiduAmount * seniorPool.sharePrice()) / 1e30;
         uint256 _expectedOut = curvePool.get_dy(0, 1, _FiduAmount); 
         uint256 _allowedSlippageLoss = (_FiduValueInWant * maxSlippage) / MAX_BIPS;
-        if (!_force && _FiduValueInWant - _allowedSlippageLoss > _expectedOut) {  // TODO: If slippage is too high and _force is false, reduce amount until it's within limit            
-            // trying to find max amount within max slippage using bisection method
-            while (_FiduValueInWant - _allowedSlippageLoss > _expectedOut) {
-                console.log("_FiduAmount = ", (_FiduAmount * seniorPool.sharePrice()) / 1e30);    
-                _FiduValueInWant = (_FiduAmount * seniorPool.sharePrice()) / 1e30;
-                _expectedOut = curvePool.get_dy(0, 1, _FiduAmount); 
+        
+        // If slippage is too high and _force is false, find max amount within max slippage using bisection method
+        if (!_force && _FiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
+            uint256 _high = _FiduAmount;
+            uint256 _low = 1;
+            uint256 _mid;
+            uint256 _best;         
+            while ((_high - _low) > 100*1e12) {
+                _mid = (_high + _low)/2;
+                console.log("_mid = ", _mid/1e12);
+                _FiduValueInWant = (_mid * seniorPool.sharePrice()) / 1e30;
+                _expectedOut = curvePool.get_dy(0, 1, _mid); 
                 _allowedSlippageLoss = (_FiduValueInWant * maxSlippage) / MAX_BIPS;
-                _FiduAmount = _FiduAmount/2;
-                console.log("Out = ", _expectedOut); 
-                console.log("(-) Try lower");
-                console.log(""); 
-                if (((_FiduAmount * seniorPool.sharePrice()) / 1e30) < minSwapAmount){
-                    _FiduAmount = 0;
-                }  
-            console.log("Found lower limit", _FiduAmount); // between amount and amount * 1.5
+                if (_FiduValueInWant - _allowedSlippageLoss > _expectedOut) {
+                    _best = _mid;
+                    _low = _mid;
+                    console.log("going higher!");
+                } else {
+                    _high = _mid;
+                }
             }
+            console.log("_best = ", _best/1e12);
+            _FiduAmount = _best;
         }
         // Loop through _tokenId's and unstake until we get the amount of _FiduAmount required
         uint256 _FiduToUnstake = _FiduAmount - balanceOfFidu();
