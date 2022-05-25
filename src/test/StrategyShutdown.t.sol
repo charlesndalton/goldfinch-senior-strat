@@ -36,8 +36,9 @@ contract StrategyShutdownTest is StrategyFixture {
         vault.setEmergencyShutdown(true);
 
         // Withdraw (does it work, do you get what you expect)
-        vm.prank(user);
-        vault.withdraw();
+        vm.startPrank(user);
+        vault.withdraw(vault.balanceOf(user), user, 300);
+        vm.stopPrank();
 
         assertRelApproxEq(want.balanceOf(user), _amount, DELTA);
     }
@@ -75,7 +76,7 @@ contract StrategyShutdownTest is StrategyFixture {
         strategy.harvest(); // Remove funds from strategy
 
         assertEq(want.balanceOf(address(strategy)), 0);
-        assertGe(want.balanceOf(address(vault)), _amount); // The vault has all funds
+        assertRelApproxEq(want.balanceOf(address(vault)), _amount, DELTA); // The vault has all funds
         // NOTE: May want to tweak this based on potential loss during migration
     }
 }

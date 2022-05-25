@@ -124,7 +124,7 @@ contract Strategy is BaseStrategy {
             return (_amountNeeded, 0);
         }
         uint256 _FiduToSwap = Math.min((_amountNeeded * 1e30) / seniorPool.sharePrice(), balanceOfAllFidu()); // 18 decimals for the share price & 12 decimals for USDC -> Fidu 
-        _swapFiduToWant(_FiduToSwap, false);
+        _swapFiduToWant(_FiduToSwap, emergencyExit);
         _liquidWant = balanceOfWant();
 
         if (_liquidWant >= _amountNeeded) {
