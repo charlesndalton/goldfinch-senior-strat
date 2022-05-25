@@ -1,4 +1,6 @@
 make all --print-data-base --no-builtin-variables --no-builtin-rules --question
+make: *** No rule to make target 'all'.  Stop.
+
 # GNU Make 4.3
 # Built for x86_64-pc-linux-gnu
 # Copyright (C) 1988-2020 Free Software Foundation, Inc.
@@ -6,7 +8,7 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Mon May 23 18:21:34 2022
+# Make data base, printed on Tue May 24 20:06:04 2022
 
 # Variables
 
@@ -21,7 +23,7 @@ SSH_AGENT_LAUNCHER = gnome-keyring
 # environment
 GJS_DEBUG_OUTPUT = stderr
 # environment
-VSCODE_IPC_HOOK_EXTHOST = /run/user/1000/vscode-ipc-aa87b828-891f-46a3-ae54-61275f77e5c2.sock
+VSCODE_IPC_HOOK_EXTHOST = /run/user/1000/vscode-ipc-e39e2d29-b827-4bae-ada1-e0967199ca74.sock
 # environment
 VSCODE_CWD = /home/simon
 # environment
@@ -93,7 +95,7 @@ MAKEFILE_LIST := Makefile .env
 # environment
 VSCODE_VERBOSE_LOGGING = true
 # environment
-VSCODE_PID = 3101
+VSCODE_PID = 12488
 # environment
 XDG_SESSION_TYPE = x11
 # automatic
@@ -101,7 +103,7 @@ XDG_SESSION_TYPE = x11
 # makefile (from 'Makefile', line 10)
 FORK_URL := https://mainnet.infura.io/v3/19c26afba6a149c6afc0fe2d566d39bb 
 # environment
-SESSION_MANAGER = local/pop-os:@/tmp/.ICE-unix/2544,unix/pop-os:/tmp/.ICE-unix/2544
+SESSION_MANAGER = local/pop-os:@/tmp/.ICE-unix/1959,unix/pop-os:/tmp/.ICE-unix/1959
 # automatic
 *F = $(notdir $*)
 # makefile (from '.env', line 4)
@@ -141,7 +143,7 @@ MAKEFILES :=
 # automatic
 ^F = $(notdir $^)
 # environment
-INVOCATION_ID = fb4344564bbe40c3be72facf2032aecd
+INVOCATION_ID = aba89a77b862464a89436a750bb16e9d
 # environment
 VSCODE_LOG_NATIVE = false
 # environment
@@ -171,7 +173,7 @@ GIO_LAUNCHED_DESKTOP_FILE = /usr/share/applications/code.desktop
 # makefile
 .DEFAULT_GOAL := update
 # environment
-SYSTEMD_EXEC_PID = 2577
+SYSTEMD_EXEC_PID = 1992
 # makefile (from '.env', line 1)
 ETH_RPC_URL = https://mainnet.infura.io/v3/19c26afba6a149c6afc0fe2d566d39bb
 # environment
@@ -185,9 +187,9 @@ MAKE_VERSION := 4.3
 # makefile (from '.env', line 2)
 FTM_RPC_URL = https://rpcapi.fantom.network
 # environment
-MANAGERPID = 2324
+MANAGERPID = 1739
 # environment
-GIO_LAUNCHED_DESKTOP_FILE_PID = 3101
+GIO_LAUNCHED_DESKTOP_FILE_PID = 12488
 # environment
 _ = /usr/share/code/code
 # environment
@@ -195,7 +197,7 @@ XDG_RUNTIME_DIR = /run/user/1000
 # environment
 GPG_AGENT_INFO = /run/user/1000/gnupg/S.gpg-agent:0:1
 # environment
-JOURNAL_STREAM = 8:34500
+JOURNAL_STREAM = 8:33517
 # environment
 XDG_SESSION_CLASS = user
 # environment
@@ -272,7 +274,7 @@ trace-contract:
 # Not a target:
 Makefile:
 #  Implicit rule search has been done.
-#  Last modified 2022-05-23 11:46:31.169464045
+#  Last modified 2022-05-23 21:11:11.090308004
 #  File has been updated.
 #  Successfully updated.
 
@@ -289,9 +291,6 @@ test-contract:
 #  File has not been updated.
 #  recipe to execute (from 'Makefile', line 14):
 	 forge test -vv --fork-url ${FORK_URL} --match-contract $(contract) --etherscan-api-key ${ETHERSCAN_API_KEY}
- 
-make: *** No rule to make target 'all'.  Stop.
-
 
 test-local:
 #  Implicit rule search has not been done.
@@ -324,6 +323,7 @@ build:
 #  Implicit rule search has not been done.
 #  Modification time never checked.
 #  File has not been updated.
+ 
 #  recipe to execute (from 'Makefile', line 11):
 	 forge build
 
@@ -362,6 +362,6 @@ test-single:
 # strcache performance: lookups = 56 / hit rate = 30%
 # hash-table stats:
 # Load=39/8192=0%, Rehash=0, Collisions=0/56=0%
-# Finished Make data base on Mon May 23 18:21:34 2022
+# Finished Make data base on Tue May 24 20:06:04 2022
 
  

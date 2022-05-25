@@ -48,7 +48,7 @@ contract Strategy is BaseStrategy {
         // maxReportDelay = 6300;
         // profitFactor = 100;
         // debtThreshold = 0;
-        maxSlippage = 60; // Default to 30 bips
+        maxSlippage = 150; // Default to 30 bips
     }
 
     function name() external view override returns (string memory) {
@@ -202,7 +202,7 @@ contract Strategy is BaseStrategy {
         uint256 _expectedOut = curvePool.get_dy(0, 1, _FiduAmount); 
         uint256 _allowedSlippageLoss = (_FiduValueInWant * maxSlippage) / MAX_BIPS;
         
-        // If slippage is too high and _force is false, find max amount within max slippage using bisection method
+        // If slippage is too high and _force is false, find max Fidu amount within max slippage using bisection method
         if (!_force && _FiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
             uint256 _high = _FiduAmount;
             uint256 _low = 1;
@@ -210,8 +210,12 @@ contract Strategy is BaseStrategy {
             uint256 _best;         
             while ((_high - _low) > 100*1e12) {
                 _mid = (_high + _low)/2;
-                console.log("_mid = ", _mid/1e12);
+                console.log("Testing for X FIDU swap to USDC = ", _mid/1e12);
                 _FiduValueInWant = (_mid * seniorPool.sharePrice()) / 1e30;
+                console.log("_FiduValueInWant = ", _FiduValueInWant);
+                console.log("_allowedSlippageLoss = ", _allowedSlippageLoss);
+                console.log("_expectedOut = ", _expectedOut);
+                console.log("");
                 _expectedOut = curvePool.get_dy(0, 1, _mid); 
                 _allowedSlippageLoss = (_FiduValueInWant * maxSlippage) / MAX_BIPS;
                 if (_FiduValueInWant - _allowedSlippageLoss > _expectedOut) {
@@ -248,12 +252,30 @@ contract Strategy is BaseStrategy {
         uint256 _expectedValueOut = ((_expectedOut * seniorPool.sharePrice()) / 1e18) / 1e12;
         uint256 _allowedSlippageLoss = (_amount * maxSlippage) / MAX_BIPS;
 
+         // If slippage is too high, find max USDC amount within max slippage using bisection method
         if (_amount - _allowedSlippageLoss > _expectedValueOut) { 
-            return; // Too much slippage
+            uint256 _high = _amount;
+            uint256 _low = 1;
+            uint256 _mid;
+            uint256 _best;         
+            while ((_high - _low) > 100*1e12) {
+                _mid = (_high + _low)/2;
+                _expectedValueOut = ((_mid* seniorPool.sharePrice()) / 1e18) / 1e12;
+                _expectedOut = curvePool.get_dy(1, 0, _mid);
+                _allowedSlippageLoss = (_mid * maxSlippage) / MAX_BIPS;
+                if (_mid - _allowedSlippageLoss > _expectedValueOut) {
+                    _best = _mid;
+                    _low = _mid;
+                } else {
+                    _high = _mid;
+                }
+            }
+            _amount = _best;
         }
-
-        _checkAllowance(address(curvePool), address(want), _amount); 
-        curvePool.exchange_underlying(1, 0, _amount, _expectedOut); 
+        if (_amount > 0){      
+            _checkAllowance(address(curvePool), address(want), _amount); 
+            curvePool.exchange_underlying(1, 0, _amount, _expectedOut); 
+        }
     }
 
     function onERC721Received(
