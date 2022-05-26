@@ -25,6 +25,7 @@ contract StrategyFixture is ExtendedTest {
     Strategy public strategy;
     IERC20 public weth;
     IERC20 public want;
+    IERC20 public GFI; 
 
     mapping(string => address) public tokenAddrs;
     mapping(string => uint256) public tokenPrices;
@@ -61,6 +62,7 @@ contract StrategyFixture is ExtendedTest {
         string memory token = "USDC";
         weth = IERC20(tokenAddrs["WETH"]);
         want = IERC20(tokenAddrs[token]);
+        GFI = IERC20(tokenAddrs["GFI"]);
 
         (address _vault, address _strategy) = deployVaultAndStrategy(
             address(want),
@@ -195,6 +197,7 @@ contract StrategyFixture is ExtendedTest {
         tokenAddrs["USDT"] = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
         tokenAddrs["DAI"] = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
         tokenAddrs["USDC"] = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+        tokenAddrs["GFI"] = 0xdab396cCF3d84Cf2D07C4454e10C8A6F5b008D2b;
     }
 
     function _setTokenPrices() internal {

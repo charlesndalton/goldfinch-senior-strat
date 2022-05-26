@@ -48,7 +48,7 @@ contract Strategy is BaseStrategy {
         // maxReportDelay = 6300;
         // profitFactor = 100;
         // debtThreshold = 0;
-        maxSlippage = 150; // Default to 30 bips
+        maxSlippage = 500; // Default to 30 bips
     }
 
     function name() external view override returns (string memory) {

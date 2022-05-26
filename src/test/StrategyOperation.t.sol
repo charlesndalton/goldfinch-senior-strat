@@ -101,8 +101,9 @@ contract StrategyOperationsTest is StrategyFixture {
         skip(1);
         vm.prank(strategist);
         strategy.harvest();
-        skip(6 hours);
-
+        
+        skip(60*24*10); // skip 10 days
+        assertGe(GFI.balanceOf(address(strategy)),1);
         // TODO: Uncomment the lines below
         // uint256 profit = want.balanceOf(address(vault));
         // assertGt(want.balanceOf(address(strategy)) + profit, _amount);
