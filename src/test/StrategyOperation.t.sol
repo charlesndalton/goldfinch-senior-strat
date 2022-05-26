@@ -102,8 +102,13 @@ contract StrategyOperationsTest is StrategyFixture {
         vm.prank(strategist);
         strategy.harvest();
         
+        // Testing GFI rewards
         skip(60*24*10); // skip 10 days
+        vm.prank(strategist);
+        strategy.harvest();
         assertGe(GFI.balanceOf(address(strategy)),1);
+        console.log("GFI reward obtained:", GFI.balanceOf(address(strategy)));
+        
         // TODO: Uncomment the lines below
         // uint256 profit = want.balanceOf(address(vault));
         // assertGt(want.balanceOf(address(strategy)) + profit, _amount);
