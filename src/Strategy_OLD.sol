@@ -43,7 +43,7 @@ contract Strategy is BaseStrategy {
 
     // solhint-disable-next-line no-empty-blocks
     constructor(address _vault) BaseStrategy(_vault) {
-        maxSlippage = 30; // Default to 30 bips
+        maxSlippage = 500; // Default to 30 bips
     }
 
     function name() external view override returns (string memory) {
@@ -51,7 +51,7 @@ contract Strategy is BaseStrategy {
     }
 
     function estimatedTotalAssets() public view override returns (uint256) {
-        return balanceOfWant() + ((balanceOfAllFidu()* seniorPool.sharePrice()) / 1e18) / 10**wantDecimals; // Fidu -> USDC decimals
+        return balanceOfWant() + ((balanceOfAllFidu()* seniorPool.sharePrice()) / 1e18) / 10**wantDecimals;
     }
 
     function prepareReturn(uint256 _debtOutstanding)
@@ -94,17 +94,17 @@ contract Strategy is BaseStrategy {
         }
     }
 
-    // Swap Want for Fidu if slippage conditions permit
+    // Swap Want -> Fidu if slippage conditions permit
     function adjustPosition(uint256 _debtOutstanding) internal override {
         uint256 _liquidWant = balanceOfWant();
         if (_liquidWant > _debtOutstanding) {
             uint256 _amountToInvest =  (_liquidWant - _debtOutstanding);
             _swapWantToFidu(_amountToInvest);
         }
-        // stake any unstaked Fidu
-        uint256 unstakedBalance = Fidu.balanceOf(address(this));
-        if (unstakedBalance > 0) {
-            _stakeFidu(unstakedBalance);
+        // Stake any unstaked Fidu
+        uint256 _unstakedBalance = Fidu.balanceOf(address(this));
+        if (_unstakedBalance > 0) {
+            _stakeFidu(_unstakedBalance);
         }
     }
 
@@ -119,8 +119,8 @@ contract Strategy is BaseStrategy {
         if (_liquidWant >= _amountNeeded) {
             return (_amountNeeded, 0);
         }
-        uint256 _FiduToSwap = Math.min((_amountNeeded * 10**(18+wantDecimals)) / seniorPool.sharePrice(), balanceOfAllFidu());
-        _swapFiduToWant(_FiduToSwap, emergencyExit);
+        uint256 _fiduToSwap = Math.min(_amountNeeded * 10**(18+wantDecimals) / seniorPool.sharePrice(), balanceOfAllFidu());
+        _swapFiduToWant(_fiduToSwap, emergencyExit);
         _liquidWant = balanceOfWant();
 
         if (_liquidWant >= _amountNeeded) {
@@ -194,22 +194,22 @@ contract Strategy is BaseStrategy {
 
     // ------- HELPER AND UTILITY FUNCTIONS -------
     function _swapFiduToWant(uint256 _fiduAmount, bool _force) internal {    
-        uint256 _FiduValueInWant = (_fiduAmount * seniorPool.sharePrice()) / 10**(18+wantDecimals);
+        uint256 _fiduValueInWant = (_fiduAmount * seniorPool.sharePrice()) / (10**(18+wantDecimals));
         uint256 _expectedOut = curvePool.get_dy(0, 1, _fiduAmount); 
-        uint256 _allowedSlippageLoss = (_FiduValueInWant * maxSlippage) / MAX_BIPS;
+        uint256 _allowedSlippageLoss = (_fiduValueInWant * maxSlippage) / MAX_BIPS;
         
         // If slippage is too high and _force is false, find max Fidu amount within max slippage using bisection method
-        if (!_force && _FiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
+        if (!_force && _fiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
             uint256 _high = _fiduAmount;
             uint256 _low = 1;
             uint256 _mid;
             uint256 _best;         
-            while ((_high - _low) > 100 * 10**(18+wantDecimals)) {
+            while ((_high - _low) > (100 * 10**wantDecimals)) {
                 _mid = (_high + _low)/2;
-                _FiduValueInWant = (_mid * seniorPool.sharePrice()) / 10**(18+wantDecimals);
+                _fiduValueInWant = (_mid * seniorPool.sharePrice()) / (10**(18+wantDecimals));
                 _expectedOut = curvePool.get_dy(0, 1, _mid); 
-                _allowedSlippageLoss = (_FiduValueInWant * maxSlippage) / MAX_BIPS;
-                if (_FiduValueInWant - _allowedSlippageLoss > _expectedOut) {
+                _allowedSlippageLoss = (_fiduValueInWant * maxSlippage) / MAX_BIPS;
+                if (_fiduValueInWant - _allowedSlippageLoss > _expectedOut) {
                     _best = _mid;
                     _low = _mid;
                 } else {
@@ -218,8 +218,8 @@ contract Strategy is BaseStrategy {
             }
             _fiduAmount = _best;
         }
-        // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
-        uint256 _fiduToUnstake = Math.max(_fiduAmount - Fidu.balanceOf(address(this)),0);
+        // Loop through _tokenId's and unstake until we get the _fiduAmount required
+        uint256 _fiduToUnstake = _fiduAmount - Fidu.balanceOf(address(this));
         while (Fidu.balanceOf(address(this)) < _fiduAmount){
             for (uint256 i=0; i < _tokenIdList.length(); i++) {
                 uint256 x = _tokenIdList.at(i);
@@ -235,19 +235,18 @@ contract Strategy is BaseStrategy {
         curvePool.exchange_underlying(0, 1, _fiduAmount, _expectedOut);
     }
     
-
     function _swapWantToFidu(uint256 _amount) internal {
         uint256 _expectedOut = curvePool.get_dy(1, 0, _amount);
         uint256 _expectedValueOut = ((_expectedOut * seniorPool.sharePrice()) / 1e18) / 10**wantDecimals;
         uint256 _allowedSlippageLoss = (_amount * maxSlippage) / MAX_BIPS;
 
-         // If slippage is too high, find max USDC amount within max slippage using bisection method
+         // If slippage is too high, find max want amount within max slippage using bisection method
         if (_amount - _allowedSlippageLoss > _expectedValueOut) { 
             uint256 _high = _amount;
             uint256 _low = 1;
             uint256 _mid;
             uint256 _best;         
-            while ((_high - _low) > 100 * 10**(18+wantDecimals)) {
+            while ((_high - _low) > (100 * 10**wantDecimals)) {
                 _mid = (_high + _low)/2;
                 _expectedValueOut = ((_mid* seniorPool.sharePrice()) / 1e18) / 10**wantDecimals;
                 _expectedOut = curvePool.get_dy(1, 0, _mid);
