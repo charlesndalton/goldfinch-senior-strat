@@ -220,16 +220,15 @@ contract Strategy is BaseStrategy {
         }
         // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
         uint256 _fiduToUnstake = Math.max(_fiduAmount - Fidu.balanceOf(address(this)),0);
-        while (Fidu.balanceOf(address(this)) < _fiduAmount){
-            for (uint256 i=0; i < _tokenIdList.length(); i++) {
-                uint256 x = _tokenIdList.at(i);
-                if (stakingRewards.stakedBalanceOf(x) <= _fiduToUnstake) { // unstake entirety of this tokenId
-                    stakingRewards.unstake(x, stakingRewards.stakedBalanceOf(x));
-                    _tokenIdList.remove(x); // remove tokenId from the list
-                } else { // partial unstake
-                    stakingRewards.unstake(x, _fiduToUnstake); }
-                _fiduToUnstake = _fiduAmount - Fidu.balanceOf(address(this)); // is there a better way to update the remaining amount to unstake?
-            }    
+        while (_fiduToUnstake > 0 && _tokenIdList.length() > 0) {
+            uint256 x = _tokenIdList.at(0);               
+            if (stakingRewards.stakedBalanceOf(x) <= _fiduToUnstake) { // unstake entirety of this tokenId
+                stakingRewards.unstake(x, stakingRewards.stakedBalanceOf(x));
+               _tokenIdList.remove(x); // remove tokenId from the list
+            } else { // partial unstake
+                stakingRewards.unstake(x, _fiduToUnstake); }
+            _fiduToUnstake = _fiduAmount - Fidu.balanceOf(address(this)); // is there a better way to update the remaining amount to unstake?
+            
         }
         _checkAllowance(address(curvePool), address(Fidu), _fiduAmount); 
         curvePool.exchange_underlying(0, 1, _fiduAmount, _expectedOut);
