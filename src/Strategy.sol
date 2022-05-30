@@ -45,7 +45,7 @@ contract Strategy is BaseStrategy {
 
     // solhint-disable-next-line no-empty-blocks
     constructor(address _vault) BaseStrategy(_vault) {
-        maxSlippage = 500; // Default to 30 bips
+        maxSlippage = 30; // Default to 30 bips
         bisectionPrecision = 100;
     }
 
