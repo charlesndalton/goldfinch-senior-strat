@@ -11,7 +11,6 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Counters} from "@openzeppelin/contracts/utils/Counters.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
@@ -30,20 +29,24 @@ contract Strategy is BaseStrategy {
     IStableSwapExchange internal constant curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
     ISeniorPool internal constant seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
     IStakingRewards internal constant stakingRewards = IStakingRewards(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3);
-    IERC20 internal constant Fidu = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
-    IERC20 internal constant GFI = IERC20(0xdab396cCF3d84Cf2D07C4454e10C8A6F5b008D2b); 
 
-    Counters.Counter tokenIdCounter; // NFT position for staked Fidu
+    IERC20 internal constant Fidu = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF); //TODO: might change
+    IERC20 internal constant GFI = IERC20(0xdab396cCF3d84Cf2D07C4454e10C8A6F5b008D2b); //TODO: might change
+
+    Counters.Counter private tokenIdCounter; // NFT position for staked Fidu
     EnumerableSet.UintSet private _tokenIdList; // Creating a set to store _tokenId's
 
     address public tradeFactory = address(0);
-    uint256 public maxSlippage; 
+    uint256 public maxSlippage;
+    uint256 public bisectionPrecision;
     uint256 internal constant MAX_BIPS = 10_000;
-    uint256 public wantDecimals = 12; // Number of decimal for the Want token (i.e. 12 for USDC)
+    uint256 public wantDecimalsAdj = 1e12; // 1: no adjustment, 1e12: want has 6 decimals (i.e. USDC)
+    uint256 public fiduDecimals = 1e18;
 
     // solhint-disable-next-line no-empty-blocks
     constructor(address _vault) BaseStrategy(_vault) {
-        maxSlippage = 30; // Default to 30 bips
+        maxSlippage = 500; // Default to 30 bips
+        bisectionPrecision = 100;
     }
 
     function name() external view override returns (string memory) {
@@ -51,7 +54,7 @@ contract Strategy is BaseStrategy {
     }
 
     function estimatedTotalAssets() public view override returns (uint256) {
-        return balanceOfWant() + ((balanceOfAllFidu()* seniorPool.sharePrice()) / 1e18) / 10**wantDecimals; // Fidu -> USDC decimals
+        return balanceOfWant() + ((balanceOfAllFidu() * seniorPool.sharePrice()) / fiduDecimals) / wantDecimalsAdj; // Fidu -> USDC decimals
     }
 
     function prepareReturn(uint256 _debtOutstanding)
@@ -119,8 +122,8 @@ contract Strategy is BaseStrategy {
         if (_liquidWant >= _amountNeeded) {
             return (_amountNeeded, 0);
         }
-        uint256 _FiduToSwap = Math.min((_amountNeeded * 10**(18+wantDecimals)) / seniorPool.sharePrice(), balanceOfAllFidu());
-        _swapFiduToWant(_FiduToSwap, emergencyExit);
+        uint256 _fiduToSwap = Math.min((_amountNeeded * (fiduDecimals*wantDecimalsAdj)) / seniorPool.sharePrice(), balanceOfAllFidu());
+        _swapFiduToWant(_fiduToSwap, emergencyExit);
         _liquidWant = balanceOfWant();
 
         if (_liquidWant >= _amountNeeded) {
@@ -139,10 +142,8 @@ contract Strategy is BaseStrategy {
     function prepareMigration(address _newStrategy) internal override {
         _unstakeAllFidu();
         _claimRewards();
-        uint256 _fiduToTransfer = Fidu.balanceOf(address(this));
-        uint256 _gfiToTransfer = GFI.balanceOf(address(this));
-        Fidu.safeTransfer(_newStrategy, _fiduToTransfer);
-        GFI.safeTransfer(_newStrategy, _gfiToTransfer);
+        Fidu.safeTransfer(_newStrategy, Fidu.balanceOf(address(this)));
+        GFI.safeTransfer(_newStrategy, GFI.balanceOf(address(this)));
         }
 
     function protectedTokens()
@@ -193,30 +194,34 @@ contract Strategy is BaseStrategy {
     }
 
     // ------- HELPER AND UTILITY FUNCTIONS -------
+
     function _swapFiduToWant(uint256 _fiduAmount, bool _force) internal {    
-        uint256 _FiduValueInWant = (_fiduAmount * seniorPool.sharePrice()) / 10**(18+wantDecimals);
+    // If slippage is too high and _force is false, find the maximum Fidu amount within maxSlippage using bisection method.
+    // First we test for the _fiduAmount, if it results in too much slippage, we try half that amount.
+    // It then iterates throught high/low trials until it's "close enough" (bisectionPrecision) to the optimal solution
+    // TODO: check gas usage
+    // If this function is too gas intensive, one option would be to calculate the amount off chain and harvest manually.
+
+        uint256 _fiduValueInWant = (_fiduAmount * seniorPool.sharePrice()) / (fiduDecimals*wantDecimalsAdj);
         uint256 _expectedOut = curvePool.get_dy(0, 1, _fiduAmount); 
-        uint256 _allowedSlippageLoss = (_FiduValueInWant * maxSlippage) / MAX_BIPS;
+        uint256 _allowedSlippageLoss = (_fiduValueInWant * maxSlippage) / MAX_BIPS;
         
-        // If slippage is too high and _force is false, find max Fidu amount within max slippage using bisection method
-        if (!_force && _FiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
+        if (!_force && _fiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
             uint256 _high = _fiduAmount;
             uint256 _low = 1;
-            uint256 _mid;
-            uint256 _best;         
-            while ((_high - _low) > 100 * 10**(18+wantDecimals)) {
+            uint256 _mid;       
+            while ((_high - _low) > bisectionPrecision * (fiduDecimals*wantDecimalsAdj)) {
                 _mid = (_high + _low)/2;
-                _FiduValueInWant = (_mid * seniorPool.sharePrice()) / 10**(18+wantDecimals);
+                _fiduValueInWant = (_mid * seniorPool.sharePrice()) / (fiduDecimals*wantDecimalsAdj);
                 _expectedOut = curvePool.get_dy(0, 1, _mid); 
-                _allowedSlippageLoss = (_FiduValueInWant * maxSlippage) / MAX_BIPS;
-                if (_FiduValueInWant - _allowedSlippageLoss > _expectedOut) {
-                    _best = _mid;
+                _allowedSlippageLoss = (_fiduValueInWant * maxSlippage) / MAX_BIPS;
+                if (_fiduValueInWant - _allowedSlippageLoss > _expectedOut) {
+                    _fiduAmount = _mid;
                     _low = _mid;
                 } else {
                     _high = _mid;
                 }
             }
-            _fiduAmount = _best;
         }
         // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
         uint256 _fiduToUnstake = Math.max(_fiduAmount - Fidu.balanceOf(address(this)),0);
@@ -236,29 +241,32 @@ contract Strategy is BaseStrategy {
     
 
     function _swapWantToFidu(uint256 _amount) internal {
+    // If slippage is too high and _force is false, find the maximum Fidu amount within maxSlippage using bisection method.
+    // First we test for the _fiduAmount, if it results in too much slippage, we try half that amount.
+    // It then iterates throught high/low trials until it's "close enough" (bisectionPrecision) to the optimal solution
+    // TODO: check gas usage
+    // If this function is too gas intensive, one option would be to calculate the amount off chain and harvest manually.
+
         uint256 _expectedOut = curvePool.get_dy(1, 0, _amount);
-        uint256 _expectedValueOut = ((_expectedOut * seniorPool.sharePrice()) / 1e18) / 10**wantDecimals;
+        uint256 _expectedValueOut = ((_expectedOut * seniorPool.sharePrice()) / fiduDecimals) / wantDecimalsAdj;
         uint256 _allowedSlippageLoss = (_amount * maxSlippage) / MAX_BIPS;
 
-         // If slippage is too high, find max USDC amount within max slippage using bisection method
-        if (_amount - _allowedSlippageLoss > _expectedValueOut) { 
+         if (_amount - _allowedSlippageLoss > _expectedValueOut) { 
             uint256 _high = _amount;
             uint256 _low = 1;
-            uint256 _mid;
-            uint256 _best;         
-            while ((_high - _low) > 100 * 10**(18+wantDecimals)) {
+            uint256 _mid;        
+            while ((_high - _low) > bisectionPrecision * (fiduDecimals*wantDecimalsAdj)) {
                 _mid = (_high + _low)/2;
-                _expectedValueOut = ((_mid* seniorPool.sharePrice()) / 1e18) / 10**wantDecimals;
+                _expectedValueOut = ((_mid* seniorPool.sharePrice()) / fiduDecimals) / wantDecimalsAdj;
                 _expectedOut = curvePool.get_dy(1, 0, _mid);
                 _allowedSlippageLoss = (_mid * maxSlippage) / MAX_BIPS;
                 if (_mid - _allowedSlippageLoss > _expectedValueOut) {
-                    _best = _mid;
+                    _amount = _mid;
                     _low = _mid;
                 } else {
                     _high = _mid;
                 }
             }
-            _amount = _best;
         }
         if (_amount > 0){      
             _checkAllowance(address(curvePool), address(want), _amount); 
@@ -266,18 +274,9 @@ contract Strategy is BaseStrategy {
         }
     }
 
-    function onERC721Received(
-        address operator,
-        address from,
-        uint256 tokenId,
-        bytes calldata data
-    ) external returns (bytes4) {
-    	return IERC721Receiver.onERC721Received.selector;
-    }
-
     function _stakeFidu(uint256 _amountToStake) internal {
         _checkAllowance(address(stakingRewards), address(Fidu), _amountToStake);
-        Fidu.approve(address(stakingRewards), _amountToStake);
+
         stakingRewards.stake(_amountToStake, 0);
         updateTokenIdCounter();
         uint256 _tokenId = tokenIdCounter.current(); // Hack: they don't return the token ID from the stake function, so we need to calculate it
