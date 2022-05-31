@@ -18,4 +18,4 @@ test-local  :; forge test
 trace-local  :; forge test -vvvv
 clean  :; forge clean
 snapshot :; forge snapshot
-test-single :; forge test -vvvvv --fork-url ${FORK_URL} --etherscan-api-key ${ETHERSCAN_API_KEY} --match-test testProfitableHarvest
+test-single :; forge test -vvvvv --fork-url ${FORK_URL} --etherscan-api-key ${ETHERSCAN_API_KEY} --match-test testSwapGas
