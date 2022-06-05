@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
-// Feel free to change the license, but this is what we use
 
 pragma solidity ^0.8.12;
 pragma experimental ABIEncoderV2;
 
-// These are the core Yearn libraries
 import {BaseStrategy, StrategyParams} from "@yearnvaults/contracts/BaseStrategy.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
@@ -14,13 +12,10 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
-// Import interfaces for many popular DeFi projects, or add your own!
 import "./interfaces/Curve/IStableSwapExchange.sol";
 import "./interfaces/Goldfinch/ISeniorPool.sol";
 import "./interfaces/Goldfinch/IStakingRewards.sol";
 import "./interfaces/ySwap/ITradeFactory.sol";
-
-import "forge-std/console2.sol"; //TODO: Remove
 
 contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
@@ -104,12 +99,8 @@ contract Strategy is BaseStrategy {
             uint256 _debtPayment
         )
     {
-        require(tradeFactory != address(0), "Trade factory must be set.");
-        
-        // First, claim any rewards.
-        _claimRewards();
 
-        // Second, run initial profit + loss calculations.
+        // run initial profit + loss calculations.
         uint256 _totalAssets = estimatedTotalAssets();
         uint256 _totalDebt = vault.strategies(address(this)).totalDebt;
 
@@ -120,7 +111,7 @@ contract Strategy is BaseStrategy {
             _loss = _totalDebt - _totalAssets;
         }
 
-        // Third, free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
+        // free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
         (uint256 _amountFreed, uint256 _liquidationLoss) =
             liquidatePosition(_debtOutstanding + _profit);
         _loss = _loss + _liquidationLoss;
@@ -139,7 +130,7 @@ contract Strategy is BaseStrategy {
     function adjustPosition(uint256 _debtOutstanding) internal override {
         uint256 _liquidWant = balanceOfWant();
         if (_liquidWant > _debtOutstanding) {
-            uint256 _amountToInvest =  (_liquidWant - _debtOutstanding);
+            uint256 _amountToInvest =  _liquidWant - _debtOutstanding;
             _swapWantToFidu(_amountToInvest);
         }
         // stake any unstaked Fidu
@@ -147,6 +138,8 @@ contract Strategy is BaseStrategy {
         if (unstakedBalance > 0) {
             _stakeFidu(unstakedBalance);
         }
+        // claim rewards
+        _claimRewards();
     }
 
     function liquidatePosition(uint256 _amountNeeded)
@@ -190,18 +183,15 @@ contract Strategy is BaseStrategy {
         override
         returns (address[] memory)
     // solhint-disable-next-line no-empty-blocks
-    {
+    {}
 
-    }
     function ethToWant(uint256 _amtInWei)
         public
         view
         virtual
         override
         returns (uint256)
-    {
-        return _amtInWei;
-    }
+    {}
 
     // ----------- MANAGEMENT FUNCTIONS -----------
     function swapFiduToWant(uint256 FiduAmount, bool force) external onlyVaultManagers {
@@ -231,7 +221,7 @@ contract Strategy is BaseStrategy {
     }
 
     // ------- HELPER AND UTILITY FUNCTIONS -------
-    function _swapFiduToWant(uint256 _fiduAmount, bool _force) internal { //
+    function _swapFiduToWant(uint256 _fiduAmount, bool _force) internal {
         uint256 _fiduValueInWant = (_fiduAmount * seniorPool.sharePrice()) / (fiduDecimals*wantDecimalsAdj);
         uint256 _expectedOut = curvePool.get_dy(0, 1, _fiduAmount); 
         uint256 _allowedSlippageLoss = (_fiduValueInWant * maxSlippage) / MAX_BIPS;
@@ -239,19 +229,20 @@ contract Strategy is BaseStrategy {
         if (!_force && _fiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
             return;
         } else {
-        // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
-        uint256 _fiduToUnstake = Math.max(_fiduAmount - Fidu.balanceOf(address(this)),0);
-        while (_fiduToUnstake > 0 && _tokenIdList.length() > 0) {
-            uint256 x = _tokenIdList.at(0);               
-            if (stakingRewards.stakedBalanceOf(x) <= _fiduToUnstake) { // unstake entirety of this tokenId
-                stakingRewards.unstake(x, stakingRewards.stakedBalanceOf(x));
-               _tokenIdList.remove(x); // remove tokenId from the list
-            } else { // partial unstake
-                stakingRewards.unstake(x, _fiduToUnstake); }
-            _fiduToUnstake = _fiduAmount - Fidu.balanceOf(address(this)); // is there a better way to update the remaining amount to unstake?
-        }
-        _checkAllowance(address(curvePool), address(Fidu), _fiduAmount); 
-        curvePool.exchange_underlying(0, 1, _fiduAmount, _expectedOut);
+            // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
+            uint256 _fiduToUnstake = Math.max(_fiduAmount - Fidu.balanceOf(address(this)),0);
+            while (_fiduToUnstake > 0 && _tokenIdList.length() > 0) {
+                uint256 x = _tokenIdList.at(0);               
+                if (stakingRewards.stakedBalanceOf(x) <= _fiduToUnstake) { // unstake entirety of this tokenId
+                    stakingRewards.unstake(x, stakingRewards.stakedBalanceOf(x));
+                   _tokenIdList.remove(x); // remove tokenId from the list
+                } else { // partial unstake
+                    stakingRewards.unstake(x, _fiduToUnstake); 
+                }
+                _fiduToUnstake = _fiduAmount - Fidu.balanceOf(address(this)); // is there a better way to update the remaining amount to unstake?
+            }
+            _checkAllowance(address(curvePool), address(Fidu), _fiduAmount); 
+            curvePool.exchange_underlying(0, 1, _fiduAmount, _expectedOut);
         }
     }
     
@@ -280,12 +271,12 @@ contract Strategy is BaseStrategy {
     }
 
     function _unstakeAllFidu() internal {
-        for (uint i=0; i<_tokenIdList.length(); i++) {
-            uint256 x = _tokenIdList.at(i);
-            uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(x);
-            stakingRewards.unstake(x, _amountToUnstake);
-            _tokenIdList.remove(x);
-            }
+        for (uint16 i = 0; i < _tokenIdList.length(); i++) {
+            uint256 _stakeId = _tokenIdList.at(i);
+            uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(_stakeId);
+            stakingRewards.unstake(_stakeId, _amountToUnstake);
+            _tokenIdList.remove(_stakeId);
+        }
     }
 
     function unstakeAllFidu() external onlyVaultManagers {
@@ -293,10 +284,10 @@ contract Strategy is BaseStrategy {
     }
 
     function _claimRewards() internal {
-        for (uint i=0; i<_tokenIdList.length(); i++) { // check claimable GFI for each tokenId
-            uint256 x = _tokenIdList.at(i);
-            if (stakingRewards.claimableRewards(x) != 0) { 
-                stakingRewards.getReward(x); // claim GFI
+        for (uint16 i = 0; i < _tokenIdList.length(); i++) { // check claimable GFI for each tokenId
+            uint256 _stakeId = _tokenIdList.at(i);
+            if (stakingRewards.claimableRewards(_stakeId) != 0) { 
+                stakingRewards.getReward(_stakeId); // claim GFI
             }
         }
     }
@@ -329,7 +320,7 @@ contract Strategy is BaseStrategy {
     function balanceOfAllFidu() public view returns (uint256) {
         uint256 _balanceOfAllFidu;
         uint256 _totalStakedFidu;
-        for (uint i=0; i<_tokenIdList.length(); i++) {
+        for (uint16 i = 0; i < _tokenIdList.length(); i++) {
             _totalStakedFidu = _totalStakedFidu + stakingRewards.stakedBalanceOf(_tokenIdList.at(i));
         }
         _balanceOfAllFidu = Fidu.balanceOf(address(this)) + _totalStakedFidu;
