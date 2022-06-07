@@ -22,10 +22,11 @@ contract Strategy is BaseStrategy {
     using Address for address;
     using Counters for Counters.Counter;
     using EnumerableSet for EnumerableSet.UintSet;
+  
+    event Cloned(address indexed clone);
 
-    IStableSwapExchange public curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
-    ISeniorPool public  seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
-    IStakingRewards public  stakingRewards = IStakingRewards(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3);
+    bool public isOriginal = true;
+
     IERC20 public constant Fidu = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
     IERC20 public constant GFI = IERC20(0xdab396cCF3d84Cf2D07C4454e10C8A6F5b008D2b);
 
@@ -33,61 +34,136 @@ contract Strategy is BaseStrategy {
     EnumerableSet.UintSet private _tokenIdList; // Creating a set to store _tokenId's
     
     uint256 internal constant MAX_BIPS = 10_000;
-    address public tradeFactory = address(0);
-    uint256 public maxSlippage;
-    uint256 public bisectionPrecision;
-    uint256 public wantDecimalsAdj = 1e12; // 1: no adjustment, 1e12: want has 6 decimals (i.e. USDC)
-    uint256 public fiduDecimals = 1e18;
+    uint256 public constant fiduDecimals = 1e18;
 
-    event Cloned(address indexed clone);
+    // TODO: Remove
+    IStableSwapExchange public curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
+    ISeniorPool public seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
+    IStakingRewards public stakingRewards = IStakingRewards(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3);
 
-    constructor(address _vault) BaseStrategy(_vault) {
-        maxSlippage = 500; // Default to 30 bips
+    string internal strategyName;  
+    uint256 public slippageProtectionIn;
+    uint256 public maxSingleInvest;
+    uint256 public wantDecimalsAdj;
+    address public tradeFactory = address(0); 
+
+    constructor(
+        address _vault,
+        uint256 _slippageProtectionIn,
+        uint256 _maxSingleInvest,
+        uint256 _wantDecimalsAdj,
+        address _tradeFactory,
+        address _curvePool,
+        address _seniorPool,
+        address _stakingRewards,
+        string memory _strategyName // TODO: NEEDED?
+    ) public BaseStrategy(_vault) {
+         _initializeStrat(_slippageProtectionIn, _maxSingleInvest, _wantDecimalsAdj, _tradeFactory, _curvePool, _seniorPool, _stakingRewards, _strategyName);
     }
 
-    function clone(address _vault) external returns (address newStrategy) {
-        newStrategy = this.clone(_vault, msg.sender, msg.sender, msg.sender);
+    function _initializeStrat( // called by constructor
+        uint256 _slippageProtectionIn,
+        uint256 _maxSingleInvest,
+        uint256 _wantDecimalsAdj,
+        address _tradeFactory,
+        address _curvePool,
+        address _seniorPool,
+        address _stakingRewards,
+        string memory _strategyName // TODO: NEEDED?
+    ) internal {
+        tradeFactory = _tradeFactory; // TODO: NEEDED?
+        slippageProtectionIn = 30;
+        maxSingleInvest = 50_000;
+        wantDecimalsAdj = 1e12;
+        curvePool = address(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
+        seniorPool = address(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
+        stakingRewards = address(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3);
+        // TODO: DO we need to set trade factory here?
     }
 
-    function clone(
+    function initialize( // called by clone
         address _vault,
         address _strategist,
         address _rewards,
-        address _keeper
-    ) external returns (address newStrategy) {
-        // Copied from https://github.com/optionality/clone-factory/blob/master/contracts/CloneFactory.sol
-        bytes20 addressBytes = bytes20(address(this));
-
-        assembly {
-            // EIP-1167 bytecode
-            let clone_code := mload(0x40)
-            mstore(clone_code, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
-            mstore(add(clone_code, 0x14), addressBytes)
-            mstore(add(clone_code, 0x28), 0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000)
-            newStrategy := create(0, clone_code, 0x37)
-        }
-
-        Strategy(newStrategy).initialize(_vault, _strategist, _rewards, _keeper);
-
-        emit Cloned(newStrategy);
-    }
-
-    // this will only be called by the clone function
-    function initialize(
-        address _vault,
-        address _strategist,
-        address _rewards,
-        address _keeper
-    ) external virtual {
+        address _keeper,
+        uint256 _slippageProtectionIn,
+        uint256 _maxSingleInvest,
+        uint256 _wantDecimalsAdj,
+        address _tradeFactory,
+        address _curvePool,
+        address _seniorPool,
+        address _stakingRewards,
+        string memory _strategyName // TODO: NEEDED?
+    ) external {
         _initialize(_vault, _strategist, _rewards, _keeper);
+        _initializeStrat(
+            _slippageProtectionIn,
+            _maxSingleInvest,
+            _wantDecimalsAdj,
+            _tradeFactory,
+            _curvePool,
+            _seniorPool,
+            _stakingRewards,
+            _strategyName // TODO: NEEDED?
+        );
     }
+
+    function cloneGoldfinch(
+            address _vault,
+            address _strategist,
+            address _rewards,
+            address _keeper,
+            uint256 _slippageProtectionIn,
+            uint256 _maxSingleInvest,
+            uint256 _wantDecimalsAdj,
+            address _tradeFactory,
+            address _curvePool,
+            address _seniorPool,
+            address _stakingRewards,
+            string memory _strategyName // TODO: NEEDED?
+        ) external returns (address newStrategy) {
+            require(isOriginal, "!clone");
+            bytes20 addressBytes = bytes20(address(this));
+
+            assembly {
+                // EIP-1167 bytecode
+                let clone_code := mload(0x40)
+                mstore(
+                    clone_code,
+                    0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000
+                )
+                mstore(add(clone_code, 0x14), addressBytes)
+                mstore(
+                    add(clone_code, 0x28),
+                    0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000
+                )
+                newStrategy := create(0, clone_code, 0x37)
+            }
+
+            Strategy(newStrategy).initialize(
+                _vault,
+                _strategist,
+                _rewards,
+                _keeper,
+                _slippageProtectionIn,
+                _maxSingleInvest,
+                _wantDecimalsAdj,
+                _tradeFactory,
+                _curvePool,
+                _seniorPool,
+                _stakingRewards,
+                _strategyName
+            );
+
+            emit Cloned(newStrategy);
+        }
 
     function name() external view override returns (string memory) {
         return "StrategyGoldfinchUSDC";
     }
 
     function estimatedTotalAssets() public view override returns (uint256) {
-        return balanceOfWant() + ((balanceOfAllFidu() * seniorPool.sharePrice()) / fiduDecimals) / wantDecimalsAdj; // Fidu -> USDC decimals
+        return balanceOfWant() + (curvePool.get_dy(0, 1, balanceOfAllFidu())/ fiduDecimals) / wantDecimalsAdj;
     }
 
     function prepareReturn(uint256 _debtOutstanding)
@@ -105,7 +181,6 @@ contract Strategy is BaseStrategy {
         uint256 _totalDebt = vault.strategies(address(this)).totalDebt;
 
         if (_totalAssets >= _totalDebt) {
-            // Implicitly, _profit & _loss are 0 before we change them.
             _profit = _totalAssets - _totalDebt;
         } else {
             _loss = _totalDebt - _totalAssets;
@@ -126,7 +201,6 @@ contract Strategy is BaseStrategy {
         }
     }
 
-    // Swap Want for Fidu if slippage conditions permit
     function adjustPosition(uint256 _debtOutstanding) internal override {
         uint256 _liquidWant = balanceOfWant();
         if (_liquidWant > _debtOutstanding) {
@@ -154,7 +228,7 @@ contract Strategy is BaseStrategy {
             return (_amountNeeded, 0);
         }
         uint256 _fiduToSwap = Math.min((_amountNeeded * (fiduDecimals*wantDecimalsAdj)) / seniorPool.sharePrice(), balanceOfAllFidu());
-        _swapFiduToWant(_fiduToSwap, emergencyExit);
+        _swapFiduToWant(_fiduToSwap);
         _liquidWant = balanceOfWant();
 
         if (_liquidWant >= _amountNeeded) {
@@ -166,7 +240,7 @@ contract Strategy is BaseStrategy {
     }
 
     function liquidateAllPositions() internal override returns (uint256) {
-        _swapFiduToWant(balanceOfAllFidu(), true);
+        _swapFiduToWant(balanceOfAllFidu());
         return balanceOfWant();
     }
 
@@ -177,25 +251,14 @@ contract Strategy is BaseStrategy {
         GFI.safeTransfer(_newStrategy, GFI.balanceOf(address(this)));
         }
 
-    function protectedTokens()
-        internal
-        view
-        override
-        returns (address[] memory)
+    function protectedTokens() internal view virtual returns (address[] memory);
     // solhint-disable-next-line no-empty-blocks
-    {}
-
-    function ethToWant(uint256 _amtInWei)
-        public
-        view
-        virtual
-        override
-        returns (uint256)
-    {}
-
+    
+    function ethToWant(uint256 _amtInWei) public view virtual returns (uint256);
+    
     // ----------- MANAGEMENT FUNCTIONS -----------
-    function swapFiduToWant(uint256 FiduAmount, bool force) external onlyVaultManagers {
-        _swapFiduToWant(FiduAmount, force);
+    function swapFiduToWant(uint256 FiduAmount) external onlyVaultManagers {
+        _swapFiduToWant(FiduAmount);
     }
 
     // ----------------- YSWAPS FUNCTIONS ---------------------
@@ -220,50 +283,67 @@ contract Strategy is BaseStrategy {
         tradeFactory = address(0);
     }
 
+    // ---------------------- SETTERS -----------------------
+    
+    function setCurvePoolContract(address _curvePool) external onlyVaultManagers {
+        curvePool = _curvePool;
+    }
+
+    function setSeniorPoolContract(address _seniorPool) external onlyVaultManagers {
+        seniorPool = _seniorPool;
+    }
+
+    function setStakingRewardsContract(address _stakingRewards) external onlyVaultManagers {
+        stakingRewards = _stakingRewards;
+    }
+
+    function setSlippageProtectionIn(uint256 _slippageProtectionIn) external onlyVaultManagers {
+        slippageProtectionIn = _slippageProtectionIn;
+    }
+
+    function setWantDecimalsAdj(uint256 _wantDecimalsAdj) external onlyVaultManagers {
+        wantDecimalsAdj = _wantDecimalsAdj;
+    }
+
+    function setMaxSingleInvest(uint256 _maxSingleInvest) external onlyVaultManagers {
+        maxSingleInvest = _maxSingleInvest;
+    }
+
     // ------- HELPER AND UTILITY FUNCTIONS -------
-    function _swapFiduToWant(uint256 _fiduAmount, bool _force) internal {
-        uint256 _fiduValueInWant = (_fiduAmount * seniorPool.sharePrice()) / (fiduDecimals*wantDecimalsAdj);
+    function _swapFiduToWant(uint256 _fiduAmount) internal {
         uint256 _expectedOut = curvePool.get_dy(0, 1, _fiduAmount); 
-        uint256 _allowedSlippageLoss = (_fiduValueInWant * maxSlippage) / MAX_BIPS;
-        // check slippage
-        if (!_force && _fiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
-            return;
-        } else {
-            // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
-            uint256 _fiduToUnstake = Math.max(_fiduAmount - Fidu.balanceOf(address(this)),0);
-            while (_fiduToUnstake > 0 && _tokenIdList.length() > 0) {
-                uint256 x = _tokenIdList.at(0);               
-                if (stakingRewards.stakedBalanceOf(x) <= _fiduToUnstake) { // unstake entirety of this tokenId
-                    stakingRewards.unstake(x, stakingRewards.stakedBalanceOf(x));
-                   _tokenIdList.remove(x); // remove tokenId from the list
-                } else { // partial unstake
-                    stakingRewards.unstake(x, _fiduToUnstake); 
-                }
-                _fiduToUnstake = _fiduAmount - Fidu.balanceOf(address(this)); // is there a better way to update the remaining amount to unstake?
+        uint256 _fiduToUnstake = Math.max(_fiduAmount - Fidu.balanceOf(address(this)),0);
+        while (_fiduToUnstake > 0 && _tokenIdList.length() > 0) {
+            uint256 _stakeId = _tokenIdList.at(0);               
+            if (stakingRewards.stakedBalanceOf(_stakeId) <= _fiduToUnstake) { // unstake entirety of this _stakeId
+                stakingRewards.unstake(_stakeId, stakingRewards.stakedBalanceOf(_stakeId));
+                _tokenIdList.remove(_stakeId); // remove _stakeId from the list
+            } else { // partial unstake
+                stakingRewards.unstake(_stakeId, _fiduToUnstake); 
             }
-            _checkAllowance(address(curvePool), address(Fidu), _fiduAmount); 
-            curvePool.exchange_underlying(0, 1, _fiduAmount, _expectedOut);
+            _fiduToUnstake = _fiduAmount - Fidu.balanceOf(address(this));
         }
+        _checkAllowance(address(curvePool), address(Fidu), _fiduAmount); 
+        curvePool.exchange_underlying(0, 1, _fiduAmount, _expectedOut);
     }
     
     function _swapWantToFidu(uint256 _amount) internal {
-        uint256 _expectedOut = curvePool.get_dy(1, 0, _amount);
+        uint256 _amountAllowed = Math.min(_amount, maxSingleInvest); // maxSingleInvest will be calc off-chain and set via onlyVaultManagers      
+        uint256 _expectedOut = curvePool.get_dy(1, 0, _amountAllowed);
         uint256 _expectedValueOut = ((_expectedOut * seniorPool.sharePrice()) / fiduDecimals) / wantDecimalsAdj;
-        uint256 _allowedSlippageLoss = (_amount * maxSlippage) / MAX_BIPS;
-        // check slippage
-        if (_amount - _allowedSlippageLoss > _expectedValueOut) { 
+        uint256 _allowedSlippageLoss = (_amountAllowed * slippageProtectionIn) / MAX_BIPS;
+        if (_amountAllowed - _allowedSlippageLoss > _expectedValueOut) { 
             return;
         } else {
-            if (_amount > 0){      
-                _checkAllowance(address(curvePool), address(want), _amount); 
-                curvePool.exchange_underlying(1, 0, _amount, _expectedOut); 
+            if (_amountAllowed > 0){      
+                _checkAllowance(address(curvePool), address(want), _amountAllowed); 
+                curvePool.exchange_underlying(1, 0, _amountAllowed, _expectedOut); 
             }
         }
     }
 
     function _stakeFidu(uint256 _amountToStake) internal {
         _checkAllowance(address(stakingRewards), address(Fidu), _amountToStake);
-
         stakingRewards.stake(_amountToStake, 0);
         updateTokenIdCounter();
         uint256 _tokenId = tokenIdCounter.current(); // Hack: they don't return the token ID from the stake function, so we need to calculate it
