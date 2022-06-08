@@ -24,8 +24,7 @@ contract Strategy is BaseStrategy {
     using Counters for Counters.Counter;
     using EnumerableSet for EnumerableSet.UintSet;
 
-// ---------------------- STATE VARIABLES -----------------------
-// same accross different wants
+// ---------------------- STATE VARIABLES ----------------------
 
     IERC20 public constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
     IERC20 public constant GFI = IERC20(0xdab396cCF3d84Cf2D07C4454e10C8A6F5b008D2b);
@@ -35,6 +34,7 @@ contract Strategy is BaseStrategy {
     uint256 internal constant MAX_BIPS = 10_000;
     uint256 public constant fiduDecimals = 1e18;
     uint256 public constant usdcDecimalsAdj = 1e12;
+    address public tradeFactory = address(0);
 
     Counters.Counter public tokenIdCounter; // NFT position for staked Fidu
     EnumerableSet.UintSet private _tokenIdList; // Creating a set to store _tokenId's
@@ -43,33 +43,29 @@ contract Strategy is BaseStrategy {
     IStakingRewards public stakingRewards;
     IStableSwapExchange public curvePoolWantUsdc;
 
-    uint256 public slippageMaxUsdcToFidu;
-    uint256 public slippageMaxFiduToUsdc;
-    uint256 public slippageMaxWantToUsdc; //TODO: need to use       
+    uint256 public slippageMaxFiduToWant;
+    uint256 public slippageMaxWantToFidu;     
     uint256 public maxSingleInvest;
     uint256 public wantDecimalsAdj;
-    address public tradeFactory; 
 
-// ---------------------- CONSTRUCTOR -----------------------
+// ---------------------- CONSTRUCTOR ----------------------
 
     constructor(
-        address _vault,
-        address _tradeFactory
+        address _vault
     ) public BaseStrategy(_vault) {
          _initializeStrat();
     }
 
-    function _initializeStrat() internal {
-        slippageMaxUsdcToFidu = 30;
-        slippageMaxFiduToUsdc = 100;      
+    function _initializeStrat() internal { // runs only once at contract deployment
+        slippageMaxFiduToWant = 30;
+        slippageMaxWantToFidu = 100;      
         maxSingleInvest = 50_000;
         wantDecimalsAdj = 1e12;
         seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
         stakingRewards = IStakingRewards(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3);
-        tradeFactory = address(0);
     }
 
-// ---------------------- CLONING -----------------------
+// ---------------------- CLONING ----------------------
 
     event Cloned(address indexed clone);
 
@@ -80,23 +76,19 @@ contract Strategy is BaseStrategy {
         address _strategist,
         address _rewards,
         address _keeper,
-        uint256 _slippageMaxUsdcToFidu,
-        uint256 _slippageMaxFiduToUsdc,
-        uint256 _slippageMaxWantToUsdc,          
+        uint256 _slippageMaxFiduToWant,
+        uint256 _slippageMaxWantToFidu,          
         uint256 _maxSingleInvest,
         uint256 _wantDecimalsAdj,
-        address _tradeFactory,
         ISeniorPool _seniorPool,
         IStakingRewards _stakingRewards, 
         IStableSwapExchange _curvePoolWantUsdc
     ) external {
         _initialize(_vault, _strategist, _rewards, _keeper);
-        _slippageMaxUsdcToFidu = slippageMaxUsdcToFidu;
-        _slippageMaxFiduToUsdc = slippageMaxFiduToUsdc;
-        _slippageMaxWantToUsdc = slippageMaxWantToUsdc;
+        _slippageMaxFiduToWant = slippageMaxFiduToWant;
+        _slippageMaxWantToFidu = slippageMaxWantToFidu;
         _maxSingleInvest = maxSingleInvest;
         _wantDecimalsAdj = wantDecimalsAdj;
-        _tradeFactory = tradeFactory;
         _seniorPool = seniorPool;
         _stakingRewards = stakingRewards;
         _curvePoolWantUsdc = curvePoolWantUsdc;
@@ -107,12 +99,10 @@ contract Strategy is BaseStrategy {
         address _strategist,
         address _rewards,
         address _keeper,
-        uint256 _slippageMaxUsdcToFidu,
-        uint256 _slippageMaxFiduToUsdc,  
-        uint256 _slippageMaxWantToUsdc, 
+        uint256 _slippageMaxFiduToWant,
+        uint256 _slippageMaxWantToFidu,  
         uint256 _maxSingleInvest,
         uint256 _wantDecimalsAdj,
-        address _tradeFactory,
         ISeniorPool _seniorPool,
         IStakingRewards _stakingRewards,
         IStableSwapExchange _curvePoolWantUsdc
@@ -140,12 +130,10 @@ contract Strategy is BaseStrategy {
                 _strategist,
                 _rewards,
                 _keeper,
-                _slippageMaxUsdcToFidu,
-                _slippageMaxFiduToUsdc,
-                _slippageMaxWantToUsdc,                
+                _slippageMaxFiduToWant,
+                _slippageMaxWantToFidu,              
                 _maxSingleInvest,
                 _wantDecimalsAdj,
-                _tradeFactory,
                 _seniorPool,
                 _stakingRewards,
                 _curvePoolWantUsdc
@@ -164,11 +152,13 @@ contract Strategy is BaseStrategy {
             );
     }
 
+// ---------------------- MAIN ----------------------
+
     function estimatedTotalAssets() public view override returns (uint256) {       
-        if (address(want) == address(USDC)) {
+        if (address(want) =! address(USDC)) {
+            return balanceOfWant() + (curvePoolWantUsdc.get_dy(0, 1 , balanceOfUsdc() / usdcDecimalsAdj)) + (curvePoolFiduUsdc.get_dy(0, 1, balanceOfAllFidu()) / fiduDecimals);
+        } else { // if want is not USDC, need to account for USDC, want and Fidu
             return balanceOfWant() + (curvePoolFiduUsdc.get_dy(0, 1, balanceOfAllFidu()) / fiduDecimals) / usdcDecimalsAdj;
-        } else {
-            return balanceOfWant() + (curvePoolWantUsdc.get_dy(0, 1 , balanceOfUsdc() / usdcDecimalsAdj)) + (curvePoolFiduUsdc.get_dy(0, 1, balanceOfAllFidu()) / fiduDecimals) / usdcDecimalsAdj;
         }
     }
 
@@ -181,7 +171,7 @@ contract Strategy is BaseStrategy {
             uint256 _debtPayment
         )
     {
-
+        require(tradeFactory != address(0), "Trade factory must be set.");
         // run initial profit + loss calculations.
         uint256 _totalAssets = estimatedTotalAssets();
         uint256 _totalDebt = vault.strategies(address(this)).totalDebt;
@@ -280,12 +270,12 @@ contract Strategy is BaseStrategy {
         return _amtInWei;
     }
     
-    // ----------- MANAGEMENT FUNCTIONS -----------
+// ---------------------- MANAGEMENT FUNCTIONS ----------------------
     function swapFiduToWant(uint256 FiduAmount) external onlyVaultManagers {
         _swapFiduToWant(FiduAmount);
     }
 
-    // ----------------- YSWAPS FUNCTIONS ---------------------
+// ---------------------- YSWAPS FUNCTIONS ----------------------
     function setTradeFactory(address _tradeFactory) external onlyGovernance {
         if (tradeFactory != address(0)) {
             _removeTradeFactoryPermissions();
@@ -307,11 +297,14 @@ contract Strategy is BaseStrategy {
         tradeFactory = address(0);
     }
 
-    // ------- HELPER AND UTILITY FUNCTIONS -------
-    // TODO: check if decimals are ok, do exchange_underlying consider slippage
-
+// ---------------------- HELPER AND UTILITY FUNCTIONS ----------------------
     function _swapFiduToWant(uint256 _fiduAmount) internal {
-        uint256 _expectedOut = curvePoolFiduUsdc.get_dy(0, 1, _fiduAmount); 
+        uint256 _expectedOut;
+        if (address(want) != address(USDC)) { 
+            _expectedOut = curvePoolWantUsdc.get_dy(0, 1, (curvePoolFiduUsdc.get_dy(0, 1, _fiduAmount)));
+        } else {
+            _expectedOut = curvePoolFiduUsdc.get_dy(0, 1, _fiduAmount);
+        }
         uint256 _fiduToUnstake = Math.max(_fiduAmount - FIDU.balanceOf(address(this)),0);
         while (_fiduToUnstake > 0 && _tokenIdList.length() > 0) {
             uint256 _stakeId = _tokenIdList.at(0);               
@@ -325,33 +318,46 @@ contract Strategy is BaseStrategy {
         }
         _checkAllowance(address(curvePoolFiduUsdc), address(FIDU), _fiduAmount); 
         curvePoolFiduUsdc.exchange_underlying(0, 1, _fiduAmount, _expectedOut);
-
-        // If Want is not USDC, sell all USDC
-        if (address(want) != address(USDC)) { 
-            uint256 _expectedWantOut = curvePoolFiduUsdc.get_dy(0, 1, balanceOfUsdc()); 
-            curvePoolWantUsdc.exchange_underlying(0, 1, balanceOfUsdc(), _expectedWantOut);
+        // If Want is not USDC, sell all USDC for Want
+        if (address(want) != address(USDC)) {
+            _checkAllowance(address(curvePoolWantUsdc), address(USDC), balanceOfUsdc()); 
+            _expectedOut = curvePoolFiduUsdc.get_dy(0, 1, balanceOfUsdc()); 
+            curvePoolWantUsdc.exchange_underlying(0, 1, balanceOfUsdc(), _expectedOut);
         }
     }
     
     function _swapWantToFidu(uint256 _amount) internal {
-        // If Want is not USDC, need to swap Want to USDC first
-        if (address(want) != address(USDC)) { 
-            uint256 _expectedUsdcOut = curvePoolFiduUsdc.get_dy(1, 0, _amount); 
-            curvePoolWantUsdc.exchange_underlying(1, 0, _amount, _expectedUsdcOut);
-            _amount = balanceOfUsdc();
-        }
+        uint256 _expectedOut;
+        uint256 _expectedWantValueOut;
         uint256 _amountAllowed = Math.min(_amount, maxSingleInvest); // maxSingleInvest will be calc off-chain and set via onlyVaultManagers      
-        uint256 _expectedOut = curvePoolFiduUsdc.get_dy(1, 0, _amountAllowed);
-        uint256 _expectedValueOut = ((_expectedOut * seniorPool.sharePrice()) / fiduDecimals) / usdcDecimalsAdj;
-        uint256 _allowedSlippageLoss = (_amountAllowed * slippageMaxUsdcToFidu) / MAX_BIPS;
-        if (_amountAllowed - _allowedSlippageLoss > _expectedValueOut) { 
+        if (address(want) != address(USDC)) { 
+            _expectedOut = curvePoolWantUsdc.get_dy(1, 0, curvePoolFiduUsdc.get_dy(1, 0, _amountAllowed));
+            _expectedWantValueOut = curvePoolFiduUsdc.get_dy(1, 0, ((_expectedOut * seniorPool.sharePrice()) / fiduDecimals) / usdcDecimalsAdj); 
+        } else {
+            _expectedOut = curvePoolFiduUsdc.get_dy(1, 0, _amountAllowed);
+            _expectedWantValueOut = ((_expectedOut * seniorPool.sharePrice()) / fiduDecimals) / usdcDecimalsAdj;
+        }
+        uint256 _allowedSlippageLoss = (_amountAllowed * slippageMaxWantToFidu) / MAX_BIPS;
+        if (_amountAllowed - _allowedSlippageLoss > _expectedWantValueOut) { 
             return;
         } else {
-            if (_amountAllowed > 0){      
-                _checkAllowance(address(curvePoolFiduUsdc), address(want), _amountAllowed); 
-                curvePoolFiduUsdc.exchange_underlying(1, 0, _amountAllowed, _expectedOut); 
+            if (_amountAllowed > 0){
+                _checkAllowance(address(curvePoolFiduUsdc), address(want), _amountAllowed);
+                // If Want is not USDC, we need to sell Want for USDC first
+                if (address(want) != address(USDC)) {   
+                    _expectedOut = curvePoolFiduUsdc.get_dy(1, 0, _amountAllowed); 
+                    curvePoolFiduUsdc.exchange_underlying(1, 0, _amountAllowed, _expectedOut);
+                    // then we swap the USDC to FIDU
+                    _checkAllowance(address(curvePoolFiduUsdc), address(USDC), _amountAllowed);
+                    _expectedOut = curvePoolFiduUsdc.get_dy(1, 0, balanceOfUsdc()); 
+                    curvePoolFiduUsdc.exchange_underlying(1, 0, balanceOfUsdc(), _expectedOut); 
+                }      
+            } else {
+                _expectedOut = curvePoolFiduUsdc.get_dy(1, 0, _amountAllowed); 
+                curvePoolFiduUsdc.exchange_underlying(1, 0, _amountAllowed, _expectedOut);
+                }
             }
-        }
+        
     }
 
     function _swapUsdcToWant(uint256 _usdcAmount) internal {
@@ -359,7 +365,7 @@ contract Strategy is BaseStrategy {
         curvePoolWantUsdc.exchange_underlying(1, 0, _usdcAmount, _expectedUsdcOut);
     }
 
-    // ---------------------- SETTERS -----------------------
+// ---------------------- SETTERS ----------------------
     
     function setcurvePoolFiduUsdcContract(IStableSwapExchange _curvePoolWantUsdc) external onlyVaultManagers {
         curvePoolWantUsdc = _curvePoolWantUsdc;
@@ -373,15 +379,19 @@ contract Strategy is BaseStrategy {
         stakingRewards = _stakingRewards;
     }
 
-    function setslippageMaxUsdcToFidu(uint256 _slippageMaxUsdcToFidu) external onlyVaultManagers {
-        slippageMaxUsdcToFidu = _slippageMaxUsdcToFidu;
+    function setslippageMaxWantToFidu(uint256 _slippageMaxWantToFidu) external onlyVaultManagers {
+        slippageMaxWantToFidu = _slippageMaxWantToFidu;
+    }
+
+    function setslippageMaxFiduToWant(uint256 _slippageMaxFiduToWant) external onlyVaultManagers {
+        slippageMaxFiduToWant = _slippageMaxFiduToWant;
     }
 
     function setMaxSingleInvest(uint256 _maxSingleInvest) external onlyVaultManagers {
         maxSingleInvest = _maxSingleInvest;
     }
     
-    // ------- FUNCTIONS APPLICABLE FOR ALL WANTS-------
+// ---------------------- GENERIC FUNCTIONS ----------------------
 
     function _stakeFidu(uint256 _amountToStake) internal {
         _checkAllowance(address(stakingRewards), address(FIDU), _amountToStake);
