@@ -59,7 +59,7 @@ contract StrategyFixture is ExtendedTest {
         _setTokenAddrs();
 
         // Choose a token from the tokenAddrs mapping, see _setTokenAddrs for options
-        string memory token = "USDC";
+        string memory token = "USDC"; //HACK: change to other coins to simulate want--> usdc--> fidu path
         weth = IERC20(tokenAddrs["WETH"]);
         want = IERC20(tokenAddrs[token]);
         GFI = IERC20(tokenAddrs["GFI"]);

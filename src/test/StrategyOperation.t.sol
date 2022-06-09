@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.12;
-import "forge-std/console.sol";
+import "forge-std/console2.sol";
 
 import {StrategyFixture} from "./utils/StrategyFixture.sol";
 
@@ -12,7 +12,7 @@ contract StrategyOperationsTest is StrategyFixture {
     }
 
     function testSetupVaultOK() public {
-        console.log("address of vault", address(vault));
+        console2.log("address of vault", address(vault));
         assertTrue(address(0) != address(vault));
         assertEq(vault.token(), address(want));
         assertEq(vault.depositLimit(), type(uint256).max);
@@ -20,7 +20,7 @@ contract StrategyOperationsTest is StrategyFixture {
 
     // TODO: add additional check on strat params
     function testSetupStrategyOK() public {
-        console.log("address of strategy", address(strategy));
+        console2.log("address of strategy", address(strategy));
         assertTrue(address(0) != address(strategy));
         assertEq(address(strategy.vault()), address(vault));
     }
@@ -98,7 +98,7 @@ contract StrategyOperationsTest is StrategyFixture {
         // TODO: Add some code before harvest #2 to simulate earning yield
 
         // Harvest 2: Realize profit
-        skip(1);
+        skip(60*24*1);
         vm.prank(strategist);
         strategy.harvest();
         
@@ -106,8 +106,8 @@ contract StrategyOperationsTest is StrategyFixture {
         skip(60*24*10); // skip 10 days
         vm.prank(strategist);
         strategy.harvest();
-        assertGe(GFI.balanceOf(address(strategy)),1);
-        console.log("GFI reward obtained:", GFI.balanceOf(address(strategy)));
+        assertGe(GFI.balanceOf(address(strategy)),1); // TODO: need to add test
+        console2.log("GFI reward obtained:", GFI.balanceOf(address(strategy)));
         
         // TODO: Uncomment the lines below
         // uint256 profit = want.balanceOf(address(vault));
