@@ -90,6 +90,7 @@ contract StrategyOperationsTest is StrategyFixture {
         uint256 beforePps = vault.pricePerShare();
 
         // Harvest 1: Send funds through the strategy
+        console2.log("Send funds through the strategy");
         skip(1);
         vm.prank(strategist);
         strategy.harvest();
@@ -98,16 +99,17 @@ contract StrategyOperationsTest is StrategyFixture {
         // TODO: Add some code before harvest #2 to simulate earning yield
 
         // Harvest 2: Realize profit
-        skip(60*24*1);
+        skip(60*24*100); // skip 10 days
+        console2.log("Fast forward 10 days");
         vm.prank(strategist);
         strategy.harvest();
         
         // Testing GFI rewards
-        skip(60*24*10); // skip 10 days
-        vm.prank(strategist);
-        strategy.harvest();
         assertGe(GFI.balanceOf(address(strategy)),1); // TODO: need to add test
         console2.log("GFI reward obtained:", GFI.balanceOf(address(strategy)));
+        
+
+
         
         // TODO: Uncomment the lines below
         // uint256 profit = want.balanceOf(address(vault));
