@@ -59,7 +59,7 @@ contract StrategyFixture is ExtendedTest {
         _setTokenAddrs();
 
         // Choose a token from the tokenAddrs mapping, see _setTokenAddrs for options
-        string memory token = "USDC"; //HACK: change to other coins to simulate want--> usdc--> fidu path
+        string memory token = "USDC";
         weth = IERC20(tokenAddrs["WETH"]);
         want = IERC20(tokenAddrs[token]);
         GFI = IERC20(tokenAddrs["GFI"]);
@@ -78,7 +78,7 @@ contract StrategyFixture is ExtendedTest {
         vault = IVault(_vault);
         strategy = Strategy(_strategy);
 
-        minFuzzAmt = 10**vault.decimals() / 10;
+        minFuzzAmt = 10**vault.decimals() * 1000;
         maxFuzzAmt =
             uint256(maxDollarNotional / tokenPrices[token]) *
             10**vault.decimals();

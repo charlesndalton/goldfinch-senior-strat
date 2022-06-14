@@ -28,7 +28,7 @@ interface IStakingRewards {
     // @notice Returns the rewards claimable by a given position token at the most recent checkpoint, taking into
     // account vesting schedule.
     // @return rewards Amount of rewards denominated in `rewardsToken()`
-    function claimableRewards(uint256 tokenId)external view returns (uint256);
+    function claimableRewards(uint256 tokenId) external view returns (uint256);
 
     // @notice Returns the staked balance of a given position token.
     // @dev The value returned is the bare amount, not the effective amount. The bare amount represents

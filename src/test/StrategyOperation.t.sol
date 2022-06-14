@@ -96,25 +96,26 @@ contract StrategyOperationsTest is StrategyFixture {
         strategy.harvest();
         assertRelApproxEq(strategy.estimatedTotalAssets(), _amount, DELTA);
 
-        // TODO: Add some code before harvest #2 to simulate earning yield
+        // Harvest 2: Send funds through the strategy
+        console2.log("--> Fast forward 5 days");
+        skip(60*24*50); // skip 5 days
+        vm.prank(strategist);
+        strategy.harvest();
+        assertRelApproxEq(strategy.estimatedTotalAssets(), _amount, DELTA);
 
-        // Harvest 2: Realize profit
+        // Harvest 3: Realize profit
+        console2.log("--> Fast forward 10 days");
         skip(60*24*100); // skip 10 days
-        console2.log("Fast forward 10 days");
         vm.prank(strategist);
         strategy.harvest();
         
         // Testing GFI rewards
-        assertGe(GFI.balanceOf(address(strategy)),1); // TODO: need to add test
+        assertGe(GFI.balanceOf(address(strategy)),1);
         console2.log("GFI reward obtained:", GFI.balanceOf(address(strategy)));
-        
 
-
-        
-        // TODO: Uncomment the lines below
-        // uint256 profit = want.balanceOf(address(vault));
-        // assertGt(want.balanceOf(address(strategy)) + profit, _amount);
-        // assertGt(vault.pricePerShare(), beforePps)
+        // Check if profitable
+        uint256 profit = want.balanceOf(address(vault));
+        assertGe(vault.pricePerShare(), beforePps);
     }
 
     function testChangeDebt(uint256 _amount) public {
