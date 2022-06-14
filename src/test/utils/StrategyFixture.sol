@@ -46,9 +46,9 @@ contract StrategyFixture is ExtendedTest {
     // @dev maximum amount of want tokens deposited based on @maxDollarNotional
     uint256 public maxFuzzAmt;
     // @dev maximum dollar amount of tokens to be deposited
-    uint256 public maxDollarNotional = 100_000;
+    uint256 public maxDollarNotional = 1_000_000;
     // @dev maximum dollar amount of tokens for single large amount
-    uint256 public bigDollarNotional = 500_000;
+    uint256 public bigDollarNotional = 5_000_000;
     // @dev used for non-fuzz tests to test large amounts
     uint256 public bigAmount;
     // Used for integer approximation
@@ -78,7 +78,7 @@ contract StrategyFixture is ExtendedTest {
         vault = IVault(_vault);
         strategy = Strategy(_strategy);
 
-        minFuzzAmt = 10**vault.decimals() * 1000;
+        minFuzzAmt = 10**vault.decimals() * 1000; // USDC 6 decimals
         maxFuzzAmt =
             uint256(maxDollarNotional / tokenPrices[token]) *
             10**vault.decimals();

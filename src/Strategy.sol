@@ -76,7 +76,7 @@ contract Strategy is BaseStrategy {
 
     // Calculate the Fidu value based on Goldfinch sharePrice
     function estimatedTotalAssetsSharePrice() public view returns (uint256) {
-        return balanceOfWant() + ((balanceOfAllFidu() * seniorPool.sharePrice()) / 1e18) / 1e12;
+        return balanceOfWant() + (balanceOfAllFidu() * seniorPool.sharePrice()) / 1e30;
     }
 
     function prepareReturn(uint256 _debtOutstanding)
