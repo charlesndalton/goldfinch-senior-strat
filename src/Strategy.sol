@@ -39,8 +39,8 @@ contract Strategy is BaseStrategy {
     ISeniorPool public  seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
     IStakingRewards public  stakingRewards = IStakingRewards(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3);
 
-    uint256 public slippageMaxWantToFidu;   
-    uint256 public slippageMaxFiduToWant;     
+    uint256 public maxSlippageWantToFidu;   
+    uint256 public maxSlippageFiduToWant;     
     uint256 public maxSingleInvest;
 
     address public tradeFactory = address(0);
@@ -54,8 +54,8 @@ contract Strategy is BaseStrategy {
     }
 
     function _initializeStrat() internal { // runs only once at contract deployment
-        slippageMaxWantToFidu = 30;
-        slippageMaxFiduToWant = 50;           
+        maxSlippageWantToFidu = 30;
+        maxSlippageFiduToWant = 50;           
         maxSingleInvest = 50_000;
     }
 
@@ -67,10 +67,11 @@ contract Strategy is BaseStrategy {
 
      // Calculate the Fidu value based on estimated Curve output
     function estimatedTotalAssets() public view override returns (uint256) {
-        if (balanceOfAllFidu() != 0) {
-            return balanceOfWant() + curvePool.get_dy(0, 1, balanceOfAllFidu());
-        } else {
+        uint256 balanceOfFidu = balanceOfAllFidu();
+        if (balanceOfFidu  == 0) {
             return balanceOfWant();
+        } else {
+            return balanceOfWant() + curvePool.get_dy(0, 1, balanceOfFidu);
         }
     }
 
@@ -88,7 +89,6 @@ contract Strategy is BaseStrategy {
             uint256 _debtPayment
         )
     {
-        _claimRewards(); 
         // run initial profit + loss calculations. Hack: sharePrice valuation used for P&L
         uint256 _totalAssets = estimatedTotalAssetsSharePrice();
         uint256 _totalDebt = vault.strategies(address(this)).totalDebt;
@@ -99,7 +99,7 @@ contract Strategy is BaseStrategy {
         }
         
         // free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
-        (uint256 _amountFreed, uint256 _liquidationLoss) = liquidatePosition(_debtOutstanding + _profit);
+        (uint256 _amountFreed, uint256 _liquidationLoss) = liquidatePositionHarvest(_debtOutstanding + _profit);
         _loss = _loss + _liquidationLoss;
         _debtPayment = Math.min(_debtOutstanding, _amountFreed);
         if (_loss > _profit) {
@@ -112,6 +112,7 @@ contract Strategy is BaseStrategy {
     }
 
     function adjustPosition(uint256 _debtOutstanding) internal override { 
+        _claimRewards(); 
         uint256 _liquidWant = balanceOfWant();
         if (_liquidWant > _debtOutstanding) {
             uint256 _amountToInvest =  Math.min(_liquidWant - _debtOutstanding, maxSingleInvest * 1e6);
@@ -149,6 +150,31 @@ contract Strategy is BaseStrategy {
         }
     }
 
+    // called by withdraw() function from the base strategy
+    function liquidatePositionHarvest(uint256 _amountNeeded)
+        internal
+        returns (uint256 _liquidatedAmount, uint256 _loss)
+    {
+        _amountNeeded = Math.min(_amountNeeded, estimatedTotalAssetsSharePrice()); // This makes it safe to request to liquidate more than we have 
+        uint256 _liquidWant = balanceOfWant();
+
+        if (_liquidWant >= _amountNeeded) {
+            return (_amountNeeded, 0);
+        }
+        // We might under/over withdraw here, but there is no get_dx curve function
+        uint256 _fiduToSwap = Math.min((_amountNeeded * 1e30) / seniorPool.sharePrice(), balanceOfAllFidu());
+        _swapFiduToWant(_fiduToSwap, emergencyExit);
+        _liquidWant = balanceOfWant();
+        // If Curve rate is worst than sharePrice, we will report a loss
+        if (_liquidWant >= _amountNeeded) {
+            _liquidatedAmount = _amountNeeded;
+        } else {
+            _liquidatedAmount = _liquidWant;
+            _loss = _amountNeeded - _liquidWant;
+        }
+    }
+
+
     function liquidateAllPositions() internal override returns (uint256) {
         _swapFiduToWant(balanceOfAllFidu(), true);
         return balanceOfWant();
@@ -185,6 +211,18 @@ contract Strategy is BaseStrategy {
         _swapFiduToWant(FiduAmount, force);
     }
 
+    function setMaxSlippageWantToFidu(uint256 _maxSlippageWantToFidu) external onlyVaultManagers {
+        maxSlippageWantToFidu = _maxSlippageWantToFidu;
+    }
+
+    function setMaxSlippageFiduToWant(uint256 _maxSlippageFiduToWant) external onlyVaultManagers {
+        maxSlippageFiduToWant = _maxSlippageFiduToWant;
+    }
+
+    function setMaxSingleInvest(uint256 _maxSingleInvest) external onlyVaultManagers {
+        maxSingleInvest = _maxSingleInvest;
+    }
+
 // ---------------------- YSWAPS FUNCTIONS ----------------------
     function setTradeFactory(address _tradeFactory) external onlyGovernance {
         if (tradeFactory != address(0)) {
@@ -210,7 +248,7 @@ contract Strategy is BaseStrategy {
     function _swapFiduToWant(uint256 _fiduAmount, bool _force) internal {
         uint256 _fiduValueInWant = (_fiduAmount * seniorPool.sharePrice()) / 1e30;
         uint256 _expectedOut = curvePool.get_dy(0, 1, _fiduAmount); 
-        uint256 _allowedSlippageLoss = (_fiduValueInWant * slippageMaxFiduToWant) / MAX_BIPS;
+        uint256 _allowedSlippageLoss = (_fiduValueInWant * maxSlippageFiduToWant) / MAX_BIPS;
         // check slippage
         if (!_force && _fiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
             return;
@@ -235,7 +273,7 @@ contract Strategy is BaseStrategy {
     function _swapWantToFidu(uint256 _amount) internal {
         uint256 _expectedOut = curvePool.get_dy(1, 0, _amount);
         uint256 _expectedValueOut = (_expectedOut * seniorPool.sharePrice()) / 1e18;
-        uint256 _allowedSlippageLoss = (_amount * slippageMaxWantToFidu) / MAX_BIPS;
+        uint256 _allowedSlippageLoss = (_amount * maxSlippageWantToFidu) / MAX_BIPS;
         // check slippage
         if (_amount - _allowedSlippageLoss > _expectedValueOut) { 
             return;
@@ -310,19 +348,4 @@ contract Strategy is BaseStrategy {
         _balanceOfAllFidu = FIDU.balanceOf(address(this)) + _totalStakedFidu;
         return _balanceOfAllFidu;
     }
-
-// ---------------------- SETTERS ----------------------
-    
-    function setslippageMaxWantToFidu(uint256 _slippageMaxWantToFidu) external onlyVaultManagers {
-        slippageMaxWantToFidu = _slippageMaxWantToFidu;
-    }
-
-    function setslippageMaxFiduToWant(uint256 _slippageMaxFiduToWant) external onlyVaultManagers {
-        slippageMaxFiduToWant = _slippageMaxFiduToWant;
-    }
-
-    function setMaxSingleInvest(uint256 _maxSingleInvest) external onlyVaultManagers {
-        maxSingleInvest = _maxSingleInvest;
-    }
-
 }
