@@ -131,7 +131,7 @@ contract Strategy is BaseStrategy {
         override
         returns (uint256 _liquidatedAmount, uint256 _loss)
     {
-        _amountNeeded = Math.min(_amountNeeded, estimatedTotalAssets()); // This makes it safe to request to liquidate more than we have 
+        _amountNeeded = Math.min(_amountNeeded, estimatedTotalAssetsSharePrice()); // This makes it safe to request to liquidate more than we have 
         uint256 _liquidWant = balanceOfWant();
 
         if (_liquidWant >= _amountNeeded) {
@@ -150,12 +150,12 @@ contract Strategy is BaseStrategy {
         }
     }
 
-    // called by withdraw() function from the base strategy
+    // called by harvest
     function liquidatePositionHarvest(uint256 _amountNeeded)
         internal
         returns (uint256 _liquidatedAmount, uint256 _loss)
     {
-        _amountNeeded = Math.min(_amountNeeded, estimatedTotalAssetsSharePrice()); // This makes it safe to request to liquidate more than we have 
+        _amountNeeded = Math.min(_amountNeeded, estimatedTotalAssets()); // This makes it safe to request to liquidate more than we have 
         uint256 _liquidWant = balanceOfWant();
 
         if (_liquidWant >= _amountNeeded) {
