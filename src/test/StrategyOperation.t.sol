@@ -4,6 +4,14 @@ import "forge-std/console2.sol";
 
 import {StrategyFixture} from "./utils/StrategyFixture.sol";
 
+
+// for whale testing
+import "../interfaces/Curve/IStableSwapExchange.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+IStableSwapExchange constant curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
+IERC20 constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
+//
+
 contract StrategyOperationsTest is StrategyFixture {
     // setup is run on before each test
     function setUp() public override {
@@ -79,6 +87,22 @@ contract StrategyOperationsTest is StrategyFixture {
     function testProfitableHarvest(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmt && _amount < maxFuzzAmt);
         deal(address(want), user, _amount);
+
+        // hack: simulate better liquidity on Curve, in line with sharePrice
+        uint256 _whaleAmountUSDC = 25_000_000 * 1e6;
+        uint256 _whaleAmountFIDU = 26_726_966 * 1e18; // 1.069078673645310178
+        console2.log("old rate for 1000 USDC--> FIDU", curvePool.get_dy(1,0, 1000000000));
+        deal(address(want), whale, _whaleAmountUSDC);
+        deal(address(FIDU), whale, _whaleAmountFIDU);
+        vm.prank(whale);
+        want.approve(address(curvePool), _whaleAmountUSDC);
+        vm.prank(whale);
+        FIDU.approve(address(curvePool), _whaleAmountFIDU);
+        vm.prank(whale);
+        uint256[2] memory x = [uint256(_whaleAmountFIDU), uint256(_whaleAmountUSDC)];
+        curvePool.add_liquidity(x, 0);
+        console2.log("new rate for 1000 USDC--> FIDU", curvePool.get_dy(1,0, 1000000000));
+        // 
 
         // Deposit to the vault
         vm.prank(user);

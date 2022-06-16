@@ -78,7 +78,7 @@ contract StrategyFixture is ExtendedTest {
         vault = IVault(_vault);
         strategy = Strategy(_strategy);
 
-        minFuzzAmt = 10**vault.decimals() * 1000; // USDC 6 decimals
+        minFuzzAmt = 10**vault.decimals() * 10000; // USDC 6 decimals
         maxFuzzAmt =
             uint256(maxDollarNotional / tokenPrices[token]) *
             10**vault.decimals();
