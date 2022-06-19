@@ -2,7 +2,7 @@
 pragma solidity ^0.8.12;
 
 import {StrategyFixture} from "./utils/StrategyFixture.sol";
-
+import "forge-std/console2.sol";
 contract StrategyShutdownTest is StrategyFixture {
     function setUp() public override {
         super.setUp();
@@ -17,6 +17,7 @@ contract StrategyShutdownTest is StrategyFixture {
         want.approve(address(vault), _amount);
         vm.prank(user);
         vault.deposit(_amount);
+        console2.log("testVaultShutdownCanWithdraw / USDC deposit (user)", _amount/1e6);
         assertRelApproxEq(want.balanceOf(address(vault)), _amount, DELTA);
 
         uint256 bal = want.balanceOf(user);
@@ -40,7 +41,7 @@ contract StrategyShutdownTest is StrategyFixture {
         vault.withdraw(vault.balanceOf(user), user, 300);
         vm.stopPrank();
 
-        assertRelApproxEq(want.balanceOf(user), _amount, DELTA);
+        assertRelApproxEq(want.balanceOf(user), _amount, DELTA); // TODO: make fail for test
     }
 
     function testBasicShutdown(uint256 _amount) public {
