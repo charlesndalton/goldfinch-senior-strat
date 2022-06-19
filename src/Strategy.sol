@@ -17,7 +17,7 @@ import "./interfaces/Curve/IStableSwapExchange.sol";
 import "./interfaces/Goldfinch/ISeniorPool.sol";
 import "./interfaces/Goldfinch/IStakingRewards.sol";
 import "./interfaces/ySwap/ITradeFactory.sol";
-
+import "forge-std/console2.sol";
 contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
@@ -54,8 +54,8 @@ contract Strategy is BaseStrategy {
     }
 
     function _initializeStrat() internal { // runs only once at contract deployment
-        maxSlippageWantToFidu = 30;
-        maxSlippageFiduToWant = 100;           
+        maxSlippageWantToFidu = 3000;
+        maxSlippageFiduToWant = 1000;           
         maxSingleInvest = 10_000;
     }
 
@@ -86,13 +86,21 @@ contract Strategy is BaseStrategy {
     {
         // run initial profit + loss calculations based on Curve pool rate
         // if Curve rate > sharePrice, we report a profit, else we report a loss
+        console2.log("prepareReturn()");
         uint256 _totalAssets = estimatedTotalAssets();
         uint256 _totalDebt = vault.strategies(address(this)).totalDebt;
+        console2.log("prepareReturn() / _totalAssets", _totalAssets);
+        console2.log("prepareReturn() / _totalDebt", _totalDebt);
+
+
+
         if (_totalAssets >= _totalDebt) {
             _profit = _totalAssets - _totalDebt;
         } else {
             _loss = _totalDebt - _totalAssets; // loss should be calculated once, when swap
         }
+        console2.log("prepareReturn() / profit reported", _profit);
+        console2.log("prepareReturn() / loss reported", _loss);      
         // free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
         (uint256 _amountFreed, uint256 _liquidationLoss) = liquidatePosition(_debtOutstanding + _profit);
         _loss = _loss + _liquidationLoss;
@@ -105,9 +113,16 @@ contract Strategy is BaseStrategy {
             _profit = _profit - _loss;
             _loss = 0;
         }
+        console2.log("prepareReturn () / profit2 reported", _profit);
+        console2.log("prepareReturn() / loss2 reported", _loss);
     }
 
     function adjustPosition(uint256 _debtOutstanding) internal override { 
+        console2.log("adjustPosition()");
+        
+        
+        
+        
         _claimRewards(); 
         uint256 _liquidWant = balanceOfWant();
         if (_liquidWant > _debtOutstanding) {
@@ -125,22 +140,40 @@ contract Strategy is BaseStrategy {
         override
         returns (uint256 _liquidatedAmount, uint256 _loss)
     {
-        _amountNeeded = Math.min(_amountNeeded, estimatedTotalAssets()); // This makes it safe to request to liquidate more than we have 
+        console2.log("liquidatePosition()");
+        console2.log("liquidatePosition() / _amountNeeded", _amountNeeded/1e6);
+        console2.log("liquidatePosition() / estimatedTotalAssets()", estimatedTotalAssets()/1e6);
+
+        uint256 _amountNeededAllowed = Math.min(_amountNeeded, estimatedTotalAssets()); // This makes it safe to request to liquidate more than we have 
         uint256 _liquidWant = balanceOfWant();
 
-        if (_liquidWant >= _amountNeeded) {
-            return (_amountNeeded, 0);
+        if (_liquidWant < _amountNeededAllowed) {
+            uint256 _fiduToSwap = Math.min((curvePool.get_dy(1, 0, _amountNeededAllowed)), balanceOfAllFidu());
+            _swapFiduToWant(_fiduToSwap, emergencyExit);
+            
         }
-        uint256 _fiduToSwap = Math.min((_amountNeeded * 1e30) / seniorPool.sharePrice(), balanceOfAllFidu());
-        _swapFiduToWant(_fiduToSwap, emergencyExit);
-        _liquidWant = balanceOfWant();
+        console2.log("liquidatePosition() / liq completed");
+        _liquidWant = balanceOfWant();  
+        
+
         // P&L calculated as the delta between sharePrice and Curve swap output amount
         if (_liquidWant >= _amountNeeded) {
             _liquidatedAmount = _amountNeeded;
         } else {
             _liquidatedAmount = _liquidWant;
             _loss = _amountNeeded - _liquidWant;
+
+
+
+            console2.log("liquidatePosition() / _liquidatedAmount", _liquidatedAmount/1e6);
+            console2.log("liquidatePosition() / _amountNeeded", _amountNeeded/1e6);
+            console2.log("liquidatePosition() / _liquidWant", _liquidWant/1e6);
+
         }
+
+
+        console2.log("liquidatePosition() / _loss", _loss/1e6);
+
     }
 
     function liquidateAllPositions() internal override returns (uint256) {
@@ -219,6 +252,10 @@ contract Strategy is BaseStrategy {
         if (!_force && _fiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
             return;
         } else {
+            console2.log("_swapFiduToWant() / USDC balance", want.balanceOf(address(this))/1e6);
+            console2.log("_swapFiduToWant() / FIDU balance", balanceOfAllFidu()/1e18);
+            console2.log("_swapFiduToWant() / entering unstake loop...");
+            console2.log("_swapFiduToWant() / we will unstake", _fiduAmount/1e18);
             // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
             uint256 _fiduToUnstake = Math.max(_fiduAmount - FIDU.balanceOf(address(this)),0);
             while (_fiduToUnstake > 0 && _tokenIdList.length() > 0) {
@@ -233,6 +270,9 @@ contract Strategy is BaseStrategy {
             }
             _checkAllowance(address(curvePool), address(FIDU), _fiduAmount); 
             curvePool.exchange_underlying(0, 1, _fiduAmount, _expectedOut);
+            console2.log("_swapFiduToWant() / unstaked and swapped");
+            console2.log("_swapFiduToWant() / USDC balance", want.balanceOf(address(this))/1e6);
+            console2.log("_swapFiduToWant() / FIDU balance", balanceOfAllFidu()/1e18);
         }
     }
     
@@ -252,6 +292,7 @@ contract Strategy is BaseStrategy {
 
     function _stakeFidu(uint256 _amountToStake) internal {
         _checkAllowance(address(stakingRewards), address(FIDU), _amountToStake);
+        console2.log("_stakeFidu() amount to stake", _amountToStake/1e18);
         stakingRewards.stake(_amountToStake, 0);
         updateTokenIdCounter();
         uint256 _tokenId = tokenIdCounter.current(); // Hack: they don't return the token ID from the stake function, so we need to calculate it
