@@ -18,8 +18,6 @@ import "./interfaces/Goldfinch/ISeniorPool.sol";
 import "./interfaces/Goldfinch/IStakingRewards.sol";
 import "./interfaces/ySwap/ITradeFactory.sol";
 
-import "forge-std/console2.sol";
-
 contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
@@ -96,7 +94,7 @@ contract Strategy is BaseStrategy {
             _loss = _totalDebt - _totalAssets; // loss should be calculated once, when swap
         }
         // free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
-        (uint256 _amountFreed, uint256 _liquidationLoss) = liquidatePosition(_debtOutstanding + _profit);
+        (uint256 _amountFreed, uint256 _liquidationLoss) = liquidatePositionHarvest(_debtOutstanding + _profit);
         _loss = _loss + _liquidationLoss;
         _debtPayment = Math.min(_debtOutstanding, _amountFreed);
     }
@@ -119,35 +117,42 @@ contract Strategy is BaseStrategy {
         override
         returns (uint256 _liquidatedAmount, uint256 _loss)
     {
-        console2.log("liquidatePosition() / amountNeeded (1)", _amountNeeded/1e6);
-        console2.log("liquidatePosition() / estimatedTotalAssets()", estimatedTotalAssets()/1e6);
         uint256 _amountNeededAllowed = Math.min(_amountNeeded, estimatedTotalAssets()); // This makes it safe to request to liquidate more than we have 
-        console2.log("liquidatePosition() / amountNeeded (2)", _amountNeededAllowed/1e6);
         uint256 _liquidWant = balanceOfWant();
-
         if (_liquidWant < _amountNeededAllowed) {
             uint256 _fiduToSwap = Math.min((curvePool.get_dy(1, 0, _amountNeededAllowed)), balanceOfAllFidu());
-            console2.log("liquidatePosition() / _fiduToSwap", _fiduToSwap/1e18);
-            _swapFiduToWant(_fiduToSwap, emergencyExit); 
-            console2.log("liquidatePosition() / liq completed");
+            _swapFiduToWant(_fiduToSwap, true); // _force set to true, as we skip slippage check for withdraw and emergencyShutdown
         } else {
              return (_amountNeededAllowed, 0);
         }
-
         _liquidWant = balanceOfWant();
-        
         if (_liquidWant >= _amountNeededAllowed) {
             _liquidatedAmount = _amountNeededAllowed;
         } else {
             _liquidatedAmount = _liquidWant;
             _loss = _amountNeeded - _liquidWant;
         }
-        console2.log("liquidatePosition() / USDC balance", want.balanceOf(address(this))/1e6);
-        console2.log("liquidatePosition()) / FIDU balance", balanceOfAllFidu()/1e18);
-        console2.log("liquidatePosition() / _liquidWant",_liquidWant/1e6);
-        console2.log("liquidatePosition() / _liquidatedAmount",_liquidatedAmount/1e6);
-        console2.log("liquidatePosition() / _loss",_loss/1e6);
+    }
 
+    function liquidatePositionHarvest(uint256 _amountNeeded)
+        internal
+        returns (uint256 _liquidatedAmount, uint256 _loss)
+    {
+        uint256 _amountNeededAllowed = Math.min(_amountNeeded, estimatedTotalAssets()); // This makes it safe to request to liquidate more than we have 
+        uint256 _liquidWant = balanceOfWant();
+        if (_liquidWant < _amountNeededAllowed) {
+            uint256 _fiduToSwap = Math.min((curvePool.get_dy(1, 0, _amountNeededAllowed)), balanceOfAllFidu());
+            _swapFiduToWant(_fiduToSwap, false);
+        } else {
+             return (_amountNeededAllowed, 0);
+        }
+        _liquidWant = balanceOfWant();
+        if (_liquidWant >= _amountNeededAllowed) {
+            _liquidatedAmount = _amountNeededAllowed;
+        } else {
+            _liquidatedAmount = _liquidWant;
+            _loss = _amountNeeded - _liquidWant;
+        }
     }
 
     function liquidateAllPositions() internal override returns (uint256) {
@@ -220,19 +225,12 @@ contract Strategy is BaseStrategy {
 
 // ---------------------- HELPER AND UTILITY FUNCTIONS ----------------------
     function _swapFiduToWant(uint256 _fiduAmount, bool _force) internal {
-        console2.log("_swapFiduToWant()");
         uint256 _fiduValueInWant = (_fiduAmount * seniorPool.sharePrice()) / 1e30;
         uint256 _expectedOut = curvePool.get_dy(0, 1, _fiduAmount); 
         uint256 _allowedSlippageLoss = (_fiduValueInWant * maxSlippageFiduToWant) / MAX_BIPS;
         if (!_force && _fiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
-            console2.log("_swapFiduToWant() _force", _force);
-            console2.log("_swapFiduToWant() RETURN");
             return;
         } else {
-            console2.log("_swapFiduToWant() / USDC balance", want.balanceOf(address(this))/1e6);
-            console2.log("_swapFiduToWant() / FIDU balance", balanceOfAllFidu()/1e18);
-            console2.log("_swapFiduToWant() / entering unstake loop...");
-            console2.log("_swapFiduToWant() / we will unstake", _fiduAmount/1e18);
             // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
             uint256 _fiduToUnstake = Math.max(_fiduAmount - FIDU.balanceOf(address(this)),0);
             while (_fiduToUnstake > 0 && _tokenIdList.length() > 0) {
@@ -247,9 +245,6 @@ contract Strategy is BaseStrategy {
             }
             _checkAllowance(address(curvePool), address(FIDU), _fiduAmount); 
             curvePool.exchange_underlying(0, 1, _fiduAmount, _expectedOut);
-            console2.log("_swapFiduToWant() / unstaked and swapped");
-            console2.log("_swapFiduToWant() / USDC balance", want.balanceOf(address(this))/1e6);
-            console2.log("_swapFiduToWant() / FIDU balance", balanceOfAllFidu()/1e18);
         }
     }
     
