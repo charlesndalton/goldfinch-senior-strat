@@ -149,7 +149,7 @@ contract StrategyOperationsTest is StrategyFixture {
 
         // Step 1: have a whale swap a bunch of FIDU -> USDC, so we get a preferable rate
 
-        uint256 _whaleFIDUToSell = 10_000_000 * 1e18;
+        uint256 _whaleFIDUToSell = 1 * 1e18;
         deal(address(FIDU), whale, _whaleFIDUToSell);
         vm.startPrank(whale);
         FIDU.approve(address(curvePool), _whaleFIDUToSell);

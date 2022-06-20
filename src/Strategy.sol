@@ -102,11 +102,14 @@ contract Strategy is BaseStrategy {
         if (_liquidWant < _toFree) {
             (uint256 _liquidationProfit, uint256 _liquidationLoss) = withdrawSome(_toFree);
             _loss = _loss + _liquidationLoss;
-            _profit = _liquidationProfit;
+            _profit = _profit + _liquidationProfit;
             _liquidWant = balanceOfWant();
-            if (_liquidWant < _toFree){
-                _debtPayment = _liquidWant;
-            }
+            if (_liquidWant < _toFree){   
+                _debtPayment = Math.min(_liquidWant, _debtOutstanding);  
+                _profit = _liquidWant - _debtPayment;
+            } else {
+                _debtPayment = _liquidWant - _profit;
+            }    
         }
         if (_loss > _profit) {
             _loss = _loss - _profit;
@@ -114,7 +117,7 @@ contract Strategy is BaseStrategy {
         } else {
             _profit = _profit - _loss;
             _loss = 0;
-        }    
+        }  
     }
 
     function adjustPosition(uint256 _debtOutstanding) internal override { 
