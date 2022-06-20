@@ -90,13 +90,31 @@ contract Strategy is BaseStrategy {
         uint256 _totalDebt = vault.strategies(address(this)).totalDebt;
         if (_totalAssets >= _totalDebt) {
             _profit = _totalAssets - _totalDebt;
+            _loss = 0;
         } else {
             _loss = _totalDebt - _totalAssets;
+            _profit = 0;
         }
+        _debtPayment = _debtOutstanding;
         // free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
-        (uint256 _amountFreed, uint256 _liquidationLoss) = liquidatePositionHarvest(_debtOutstanding + _profit);
-        _loss = _loss + _liquidationLoss;
-        _debtPayment = Math.min(_debtOutstanding, _amountFreed);
+        uint256 _liquidWant = balanceOfWant();
+        uint256 _toFree = _debtOutstanding + _profit;
+        if (_liquidWant < _toFree) {
+            (uint256 _liquidationProfit, uint256 _liquidationLoss) = withdrawSome(_toFree);
+            _loss = _loss + _liquidationLoss;
+            _profit = _liquidationProfit;
+            _liquidWant = balanceOfWant();
+            if (_liquidWant < _toFree){
+                _debtPayment = _liquidWant;
+            }
+        }
+        if (_loss > _profit) {
+            _loss = _loss - _profit;
+            _profit = 0;
+        } else {
+            _profit = _profit - _loss;
+            _loss = 0;
+        }    
     }
 
     function adjustPosition(uint256 _debtOutstanding) internal override { 
@@ -134,22 +152,25 @@ contract Strategy is BaseStrategy {
         }
     }
 
-    function liquidatePositionHarvest(uint256 _amountNeeded)
+    function withdrawSome(uint256 _amountNeeded)
         internal
-        returns (uint256 _liquidatedAmount, uint256 _loss)
+        returns (uint256 _liquidationProfit, uint256 _liquidationLoss)
     {
         uint256 _estimatedTotalAssetsBefore = estimatedTotalAssets();
-        uint256 _amountNeededAllowed = Math.min(_amountNeeded, _estimatedTotalAssetsBefore); // This makes it safe to request to liquidate more than we have 
+        uint256 _amountNeededAllowed = Math.min(_amountNeeded, balanceOfAllFidu()); // This makes it safe to request to liquidate more than we have 
         uint256 _liquidWant = balanceOfWant();
         if (_liquidWant < _amountNeededAllowed) {
-            uint256 _fiduToSwap = Math.min((curvePool.get_dy(1, 0, _amountNeededAllowed)), balanceOfAllFidu());
+            uint256 _fiduToSwap = (curvePool.get_dy(1, 0, _amountNeededAllowed));
             _swapFiduToWant(_fiduToSwap, false);
             _liquidWant = balanceOfWant();
-            if (_liquidWant >= _amountNeededAllowed) {
-                return (_amountNeededAllowed, 0);
-            } else {  
-                return (_liquidWant, estimatedTotalAssets() - _estimatedTotalAssetsBefore);
+            uint256 _estimatedTotalAssets = estimatedTotalAssets();
+            if (_estimatedTotalAssets >= _estimatedTotalAssetsBefore) {
+                return (estimatedTotalAssets() - _estimatedTotalAssetsBefore, 0);
+            } else { 
+                return (0, _estimatedTotalAssetsBefore - estimatedTotalAssets());
             }
+        } else { 
+            return (0,0);
         }
     }
 

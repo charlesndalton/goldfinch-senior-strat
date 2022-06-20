@@ -88,21 +88,14 @@ contract StrategyOperationsTest is StrategyFixture {
         vm.assume(_amount > minFuzzAmt && _amount < maxFuzzAmt);
         deal(address(want), user, _amount);
 
-        // hack: simulate better liquidity on Curve, in line with sharePrice
-        uint256 _whaleAmountUSDC = 25_000_000 * 1e6;
-        uint256 _whaleAmountFIDU = 26_726_966 * 1e18; // 1.069078673645310178
-        console2.log("old rate for 1000 USDC--> FIDU", curvePool.get_dy(1,0, 1000000000));
-        deal(address(want), whale, _whaleAmountUSDC);
-        deal(address(FIDU), whale, _whaleAmountFIDU);
-        vm.prank(whale);
-        want.approve(address(curvePool), _whaleAmountUSDC);
-        vm.prank(whale);
-        FIDU.approve(address(curvePool), _whaleAmountFIDU);
-        vm.prank(whale);
-        uint256[2] memory x = [uint256(_whaleAmountFIDU), uint256(_whaleAmountUSDC)];
-        curvePool.add_liquidity(x, 0);
-        console2.log("new rate for 1000 USDC--> FIDU", curvePool.get_dy(1,0, 1000000000));
-        // 
+        // have a whale swap a bunch of FIDU -> USDC, so we get a preferable rate
+
+        uint256 _whaleFIDUToSell = 10_000_000 * 1e18;
+        deal(address(FIDU), whale, _whaleFIDUToSell);
+        vm.startPrank(whale);
+        FIDU.approve(address(curvePool), _whaleFIDUToSell);
+        curvePool.exchange_underlying(0, 1, _whaleFIDUToSell, 0);
+        vm.stopPrank();
 
         // Deposit to the vault
         vm.prank(user);
@@ -112,6 +105,14 @@ contract StrategyOperationsTest is StrategyFixture {
         assertRelApproxEq(want.balanceOf(address(vault)), _amount, DELTA);
 
         uint256 beforePps = vault.pricePerShare();
+
+        // have whale swap his USDC back to FIDU, so we should be able to declare profits
+
+        uint256 _whaleUSDCToSell = want.balanceOf(whale);
+        vm.startPrank(whale);
+        want.approve(address(curvePool), _whaleUSDCToSell);
+        curvePool.exchange_underlying(1, 0, _whaleUSDCToSell, 0);
+        vm.stopPrank(); 
 
         // Harvest 1: Send funds through the strategy
         console2.log("Send funds through the strategy");
@@ -161,7 +162,8 @@ contract StrategyOperationsTest is StrategyFixture {
         want.approve(address(vault), _amount);
         vault.deposit(_amount);
         vm.stopPrank();
-
+        
+        skip(1);
         vm.prank(strategist);
         strategy.harvest();
 
