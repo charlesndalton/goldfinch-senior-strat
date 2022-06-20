@@ -56,7 +56,7 @@ contract Strategy is BaseStrategy {
     function _initializeStrat() internal { // runs only once at contract deployment
         maxSlippageWantToFidu = 30;
         maxSlippageFiduToWant = 50;           
-        maxSingleInvest = 10_000;
+        maxSingleInvest = 10_000 * 1e6;
     }
 
     function name() external view override returns (string memory) {
@@ -67,11 +67,11 @@ contract Strategy is BaseStrategy {
 
      // Calculate the Fidu value based on estimated Curve output
     function estimatedTotalAssets() public view override returns (uint256) {
-        uint256 balanceOfFidu = balanceOfAllFidu();
-        if (balanceOfFidu  == 0) {
+        uint256 _balanceOfFidu = balanceOfAllFidu();
+        if (_balanceOfFidu  == 0) {
             return balanceOfWant();
         } else {
-            return balanceOfWant() + curvePool.get_dy(0, 1, balanceOfFidu);
+            return balanceOfWant() + curvePool.get_dy(0, 1, _balanceOfFidu);
         }
     }
 
@@ -91,7 +91,7 @@ contract Strategy is BaseStrategy {
         if (_totalAssets >= _totalDebt) {
             _profit = _totalAssets - _totalDebt;
         } else {
-            _loss = _totalDebt - _totalAssets; // loss should be calculated once, when swap
+            _loss = _totalDebt - _totalAssets;
         }
         // free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
         (uint256 _amountFreed, uint256 _liquidationLoss) = liquidatePositionHarvest(_debtOutstanding + _profit);
@@ -103,7 +103,7 @@ contract Strategy is BaseStrategy {
         _claimRewards(); 
         uint256 _liquidWant = balanceOfWant(); 
         if (_liquidWant > _debtOutstanding) {
-            uint256 _amountToInvest =  Math.min(_liquidWant - _debtOutstanding, maxSingleInvest * 1e6);
+            uint256 _amountToInvest =  Math.min(_liquidWant - _debtOutstanding, maxSingleInvest);
             _swapWantToFidu(_amountToInvest);
         }
         uint256 unstakedBalance = FIDU.balanceOf(address(this)); // stake any unstaked Fidu
@@ -138,20 +138,18 @@ contract Strategy is BaseStrategy {
         internal
         returns (uint256 _liquidatedAmount, uint256 _loss)
     {
-        uint256 _amountNeededAllowed = Math.min(_amountNeeded, estimatedTotalAssets()); // This makes it safe to request to liquidate more than we have 
+        uint256 _estimatedTotalAssetsBefore = estimatedTotalAssets();
+        uint256 _amountNeededAllowed = Math.min(_amountNeeded, _estimatedTotalAssetsBefore); // This makes it safe to request to liquidate more than we have 
         uint256 _liquidWant = balanceOfWant();
         if (_liquidWant < _amountNeededAllowed) {
             uint256 _fiduToSwap = Math.min((curvePool.get_dy(1, 0, _amountNeededAllowed)), balanceOfAllFidu());
             _swapFiduToWant(_fiduToSwap, false);
-        } else {
-             return (_amountNeededAllowed, 0);
-        }
-        _liquidWant = balanceOfWant();
-        if (_liquidWant >= _amountNeededAllowed) {
-            _liquidatedAmount = _amountNeededAllowed;
-        } else {
-            _liquidatedAmount = _liquidWant;
-            _loss = _amountNeeded - _liquidWant;
+            _liquidWant = balanceOfWant();
+            if (_liquidWant >= _amountNeededAllowed) {
+                return (_amountNeededAllowed, 0);
+            } else {  
+                return (_liquidWant, estimatedTotalAssets() - _estimatedTotalAssetsBefore);
+            }
         }
     }
 
@@ -232,7 +230,7 @@ contract Strategy is BaseStrategy {
             return;
         } else {
             // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
-            uint256 _fiduToUnstake = Math.max(_fiduAmount - FIDU.balanceOf(address(this)),0);
+            uint256 _fiduToUnstake = _fiduAmount - FIDU.balanceOf(address(this));
             while (_fiduToUnstake > 0 && _tokenIdList.length() > 0) {
                 uint256 _stakeId = _tokenIdList.at(0);               
                 if (stakingRewards.stakedBalanceOf(_stakeId) <= _fiduToUnstake) {
