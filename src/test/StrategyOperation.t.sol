@@ -142,6 +142,47 @@ contract StrategyOperationsTest is StrategyFixture {
         // assertGe(vault.pricePerShare(), beforePps);
     }
 
+    function testDebtPaymentWithProfit(uint256 _amount) public {
+        vm.assume(_amount > minFuzzAmt && _amount < maxFuzzAmt);
+        deal(address(want), user, _amount);
+
+        // Step 1: have a whale swap a bunch of FIDU -> USDC, so we get a preferable rate
+
+        uint256 _whaleFIDUToSell = 10_000_000 * 1e18;
+        deal(address(FIDU), whale, _whaleFIDUToSell);
+        vm.startPrank(whale);
+        FIDU.approve(address(curvePool), _whaleFIDUToSell);
+        curvePool.exchange_underlying(0, 1, _whaleFIDUToSell, 0);
+        vm.stopPrank();
+
+        // Step 2: deposit to strat and harvest, so we can scoop up some of that FIDU
+
+        vm.startPrank(user);
+        want.approve(address(vault), _amount);
+        vault.deposit(_amount);
+        vm.stopPrank();
+
+        vm.prank(strategist);
+        strategy.harvest();
+
+        // Step 3: have whale swap his USDC back to FIDU, so we should be able to declare profits
+
+        uint256 _whaleUSDCToSell = want.balanceOf(whale);
+        vm.startPrank(whale);
+        want.approve(address(curvePool), _whaleUSDCToSell);
+        curvePool.exchange_underlying(1, 0, _whaleUSDCToSell, 0);
+        vm.stopPrank(); 
+
+        // Step 4: decrease debt ratio before harvesting, then harvest profit
+
+        vm.prank(gov);
+        vault.updateStrategyDebtRatio(address(strategy), 5_000);
+        skip(1);
+        vm.prank(strategist);
+        strategy.harvest();
+
+    }
+
     function testChangeDebt(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmt && _amount < maxFuzzAmt);
         deal(address(want), user, _amount);
