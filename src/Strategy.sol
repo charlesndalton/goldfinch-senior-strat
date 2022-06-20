@@ -55,7 +55,7 @@ contract Strategy is BaseStrategy {
 
     function _initializeStrat() internal { // runs only once at contract deployment
         maxSlippageWantToFidu = 30;
-        maxSlippageFiduToWant = 100;           
+        maxSlippageFiduToWant = 50;           
         maxSingleInvest = 10_000;
     }
 
@@ -101,7 +101,7 @@ contract Strategy is BaseStrategy {
 
     function adjustPosition(uint256 _debtOutstanding) internal override { 
         _claimRewards(); 
-        uint256 _liquidWant = balanceOfWant();
+        uint256 _liquidWant = balanceOfWant(); 
         if (_liquidWant > _debtOutstanding) {
             uint256 _amountToInvest =  Math.min(_liquidWant - _debtOutstanding, maxSingleInvest * 1e6);
             _swapWantToFidu(_amountToInvest);
@@ -109,7 +109,7 @@ contract Strategy is BaseStrategy {
         uint256 unstakedBalance = FIDU.balanceOf(address(this)); // stake any unstaked Fidu
         if (unstakedBalance > 0) {
             _stakeFidu(unstakedBalance);
-        }           
+        }        
     }
 
     function liquidatePosition(uint256 _amountNeeded)
@@ -289,6 +289,10 @@ contract Strategy is BaseStrategy {
             stakingRewards.getReward(_stakeId);
             
         }   
+    }
+
+    function manuallyClaimRewards() external onlyVaultManagers {
+        _claimRewards(); 
     }
 
     function _checkAllowance(
