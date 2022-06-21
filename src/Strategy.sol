@@ -102,7 +102,8 @@ contract Strategy is BaseStrategy {
 
         // liquidate some of the Want
         if (_liquidWant < _toFree) {
-            (uint256 _liquidationProfit, uint256 _liquidationLoss) = withdrawSome(_toFree);
+            // liquidation can result in a profit as we are using get_dy as an estimate of the amount of Fidu required
+            (uint256 _liquidationProfit, uint256 _liquidationLoss) = withdrawSome(_toFree); 
 
             // update the P&L to account for liquidation
             _loss = _loss + _liquidationLoss;
@@ -117,7 +118,7 @@ contract Strategy is BaseStrategy {
             // Case 2 - enough to pay _profit and _debtOutstanding
             // Case 3 - enough to pay for all profit, and some _debtOutstanding
             } else {
-                _debtPayment = _liquidWant - _profit;
+                _debtPayment = Math.min(_liquidWant - _profit, _debtOutstanding);
             }
         }
         if (_loss > _profit) {
@@ -147,17 +148,16 @@ contract Strategy is BaseStrategy {
         override
         returns (uint256 _liquidatedAmount, uint256 _loss)
     {
-        uint256 _amountNeededAllowed = Math.min(_amountNeeded, estimatedTotalAssets()); // This makes it safe to request to liquidate more than we have 
         uint256 _liquidWant = balanceOfWant();
-        if (_liquidWant < _amountNeededAllowed) {
-            uint256 _fiduToSwap = Math.min((curvePool.get_dy(1, 0, _amountNeededAllowed)), balanceOfAllFidu());
+        if (_liquidWant < _amountNeeded) {
+            uint256 _fiduToSwap = Math.min((curvePool.get_dy(1, 0, _amountNeeded)), balanceOfAllFidu());
             _swapFiduToWant(_fiduToSwap, true); // _force set to true, as we skip slippage check for withdraw and emergencyShutdown
         } else {
-             return (_amountNeededAllowed, 0);
+             return (_amountNeeded, 0);
         }
         _liquidWant = balanceOfWant();
-        if (_liquidWant >= _amountNeededAllowed) {
-            _liquidatedAmount = _amountNeededAllowed;
+        if (_liquidWant >= _amountNeeded) {
+            _liquidatedAmount = _amountNeeded;
         } else {
             _liquidatedAmount = _liquidWant;
             _loss = _amountNeeded - _liquidWant;
