@@ -55,7 +55,7 @@ contract Strategy is BaseStrategy {
 
     function _initializeStrat() internal {
         maxSlippageWantToFidu = 30;
-        maxSlippageFiduToWant = 5000;           
+        maxSlippageFiduToWant = 30;           
         maxSingleInvest = 10_000 * 1e6;
     }
 
