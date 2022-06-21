@@ -53,9 +53,9 @@ contract Strategy is BaseStrategy {
          _initializeStrat();
     }
 
-    function _initializeStrat() internal { // runs only once at contract deployment
+    function _initializeStrat() internal {
         maxSlippageWantToFidu = 30;
-        maxSlippageFiduToWant = 50;           
+        maxSlippageFiduToWant = 5000;           
         maxSingleInvest = 10_000 * 1e6;
     }
 
@@ -84,8 +84,7 @@ contract Strategy is BaseStrategy {
             uint256 _debtPayment
         )
     {
-        // run initial profit + loss calculations based on Curve pool rate
-        // if Curve rate > sharePrice, we report a profit, else we report a loss
+        // initial P&L calculations based on Curve pool rate
         uint256 _totalAssets = estimatedTotalAssets();
         uint256 _totalDebt = vault.strategies(address(this)).totalDebt;
         if (_totalAssets >= _totalDebt) {
@@ -96,20 +95,30 @@ contract Strategy is BaseStrategy {
             _profit = 0;
         }
         _debtPayment = _debtOutstanding;
+
         // free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
         uint256 _liquidWant = balanceOfWant();
         uint256 _toFree = _debtOutstanding + _profit;
+
+        // liquidate some of the Want
         if (_liquidWant < _toFree) {
             (uint256 _liquidationProfit, uint256 _liquidationLoss) = withdrawSome(_toFree);
+
+            // update the P&L to account for liquidation
             _loss = _loss + _liquidationLoss;
             _profit = _profit + _liquidationProfit;
             _liquidWant = balanceOfWant();
-            if (_liquidWant < _toFree){   
-                _debtPayment = Math.min(_liquidWant, _debtOutstanding);  
-                _profit = _liquidWant - _debtPayment;
+
+            // Case 1 - enough to pay profit (or some) only
+            if (_liquidWant <= _profit){
+                _profit = _liquidWant;
+                _debtPayment = 0;
+
+            // Case 2 - enough to pay _profit and _debtOutstanding
+            // Case 3 - enough to pay for all profit, and some _debtOutstanding
             } else {
                 _debtPayment = _liquidWant - _profit;
-            }    
+            }
         }
         if (_loss > _profit) {
             _loss = _loss - _profit;
@@ -160,20 +169,13 @@ contract Strategy is BaseStrategy {
         returns (uint256 _liquidationProfit, uint256 _liquidationLoss)
     {
         uint256 _estimatedTotalAssetsBefore = estimatedTotalAssets();
-        uint256 _amountNeededAllowed = Math.min(_amountNeeded, balanceOfAllFidu()); // This makes it safe to request to liquidate more than we have 
-        uint256 _liquidWant = balanceOfWant();
-        if (_liquidWant < _amountNeededAllowed) {
-            uint256 _fiduToSwap = (curvePool.get_dy(1, 0, _amountNeededAllowed));
-            _swapFiduToWant(_fiduToSwap, false);
-            _liquidWant = balanceOfWant();
-            uint256 _estimatedTotalAssets = estimatedTotalAssets();
-            if (_estimatedTotalAssets >= _estimatedTotalAssetsBefore) {
-                return (estimatedTotalAssets() - _estimatedTotalAssetsBefore, 0);
-            } else { 
-                return (0, _estimatedTotalAssetsBefore - estimatedTotalAssets());
-            }
+        uint256 _fiduToSwap = (curvePool.get_dy(1, 0, _amountNeeded));
+        _swapFiduToWant(_fiduToSwap, false);
+        uint256 _estimatedTotalAssetsAfter = estimatedTotalAssets();
+        if (_estimatedTotalAssetsAfter >= _estimatedTotalAssetsBefore) {
+            return (_estimatedTotalAssetsAfter - _estimatedTotalAssetsBefore, 0);
         } else { 
-            return (0,0);
+            return (0, _estimatedTotalAssetsBefore - _estimatedTotalAssetsAfter);
         }
     }
 
