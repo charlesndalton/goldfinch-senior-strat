@@ -11,7 +11,8 @@ interface IStakingRewards {
     //   to claim rewards or unstake your tokens respectively. Rewards vest over a schedule.
     // @dev This function checkpoints rewards.
     // @param amount The amount of `stakingToken()` to stake
-    function stake(uint256 amount, uint8 positionType) external;
+    // @return Id of the NFT representiong the staked position
+    function stake(uint256 amount, uint8 positionType) external view returns (uint256);
 
     // @notice Unstake an amount of `stakingToken()` associated with a given position and transfer to msg.sender.
     //   Unvested rewards will be forfeited, but remaining staked amount will continue to accrue rewards.
@@ -37,5 +38,4 @@ interface IStakingRewards {
     // @return Amount of staked tokens denominated in `stakingToken().decimals()`
     function stakedBalanceOf(uint256 tokenId) external view returns (uint256);
 
-    function _tokenIdTracker() external view returns (Counters.Counter memory);
   }
