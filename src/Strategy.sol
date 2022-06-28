@@ -8,7 +8,6 @@ import {IERC20Metadata} from "@yearnvaults/contracts/yToken.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
-import {Counters} from "@openzeppelin/contracts/utils/Counters.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
@@ -21,7 +20,6 @@ import "./interfaces/ySwap/ITradeFactory.sol";
 contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
-    using Counters for Counters.Counter;
     using EnumerableSet for EnumerableSet.UintSet;
 
 // ---------------------- STATE VARIABLES ----------------------
@@ -32,7 +30,6 @@ contract Strategy is BaseStrategy {
 
     uint256 internal constant MAX_BIPS = 10_000;
 
-    Counters.Counter public tokenIdCounter; // NFT position for staked Fidu
     EnumerableSet.UintSet private _tokenIdList; // Creating a set to store _tokenId's
 
     IStableSwapExchange public curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
@@ -42,8 +39,7 @@ contract Strategy is BaseStrategy {
     uint256 public maxSlippageWantToFidu;   
     uint256 public maxSlippageFiduToWant;     
     uint256 public maxSingleInvest;
-
-    address public tradeFactory = address(0);
+    address public tradeFactory;
 
 // ---------------------- CONSTRUCTOR ----------------------
 
@@ -288,9 +284,7 @@ contract Strategy is BaseStrategy {
 
     function _stakeFidu(uint256 _amountToStake) internal {
         _checkAllowance(address(stakingRewards), address(FIDU), _amountToStake);
-        stakingRewards.stake(_amountToStake, 0);
-        updateTokenIdCounter();
-        uint256 _tokenId = tokenIdCounter.current(); // Hack: they don't return the token ID from the stake function, so we need to calculate it
+        uint256 _tokenId = stakingRewards.stake(_amountToStake, 0);
         _tokenIdList.add(_tokenId); // each time we stake Fidu, a new _tokenId is created
     }
 
@@ -334,10 +328,6 @@ contract Strategy is BaseStrategy {
                 _amount - _currentAllowance
             );
         }
-    }
-    
-    function updateTokenIdCounter() internal {
-        tokenIdCounter = stakingRewards._tokenIdTracker();
     }
 
     function balanceOfWant() public view returns (uint256) {
