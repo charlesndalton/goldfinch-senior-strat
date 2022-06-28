@@ -12,7 +12,7 @@ interface IStakingRewards {
     // @dev This function checkpoints rewards.
     // @param amount The amount of `stakingToken()` to stake
     // @return Id of the NFT representiong the staked position
-    function stake(uint256 amount, uint8 positionType) external view returns (uint256);
+    function stake(uint256 amount, uint8 positionType) external returns (uint256);
 
     // @notice Unstake an amount of `stakingToken()` associated with a given position and transfer to msg.sender.
     //   Unvested rewards will be forfeited, but remaining staked amount will continue to accrue rewards.
