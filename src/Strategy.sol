@@ -182,7 +182,6 @@ contract Strategy is BaseStrategy {
 
     function prepareMigration(address _newStrategy) internal override {
         _unstakeAllFidu();
-        _claimRewards();
         FIDU.safeTransfer(_newStrategy, FIDU.balanceOf(address(this)));
         GFI.safeTransfer(_newStrategy, GFI.balanceOf(address(this)));
         }
@@ -314,19 +313,13 @@ contract Strategy is BaseStrategy {
     }
 
     function _checkAllowance(
-        address _spender,
+        address _contract,
         address _token,
         uint256 _amount
     ) internal {
-        uint256 _currentAllowance = IERC20(_token).allowance(
-            address(this),
-            _spender
-        );
-        if (_currentAllowance < _amount) {
-            IERC20(_token).safeIncreaseAllowance(
-                _spender,
-                _amount - _currentAllowance
-            );
+        if (IERC20(_token).allowance(address(this), _contract) < _amount) {
+            IERC20(_token).safeApprove(_contract, 0);
+            IERC20(_token).safeApprove(_contract, _amount);
         }
     }
 
