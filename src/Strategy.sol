@@ -272,17 +272,6 @@ contract Strategy is BaseStrategy {
             return true;
         }
 
-        StrategyParams memory params = vault.strategies(address(this));
-        // harvest no matter what once we reach our maxDelay
-        if (block.timestamp.sub(params.lastReport) > maxReportDelay) {
-            return true;
-        }
-
-        // harvest our credit if it's above our threshold
-        if (vault.creditAvailable() > creditThreshold) {
-            return true;
-        }
-
         // otherwise, we don't harvest
         return false;
     }
