@@ -38,4 +38,9 @@ interface IStakingRewards {
     // @return Amount of staked tokens denominated in `stakingToken().decimals()`
     function stakedBalanceOf(uint256 tokenId) external view returns (uint256);
 
+    /// @notice Add `amount` to an existing FIDU position (`tokenId`)
+    /// @param tokenId A staking position token ID
+    /// @param amount Amount of `stakingToken()` to be added to tokenId's position
+    function addToStake(uint256 tokenId, uint256 amount) external;
+
   }

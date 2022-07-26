@@ -10,7 +10,6 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 interface IBaseFee {
     function isCurrentBaseFeeAcceptable() external view returns (bool);
@@ -24,7 +23,6 @@ import "./interfaces/ySwap/ITradeFactory.sol";
 contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
-    using EnumerableSet for EnumerableSet.UintSet;
 
 // ---------------------- STATE VARIABLES ----------------------
 
@@ -34,7 +32,6 @@ contract Strategy is BaseStrategy {
 
     uint256 internal constant MAX_BIPS = 10_000;
 
-    EnumerableSet.UintSet private _tokenIdList; // Creating a set to store _tokenId's
 
     IStableSwapExchange public curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
     ISeniorPool public seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
@@ -45,6 +42,7 @@ contract Strategy is BaseStrategy {
     uint256 public maxSlippageWantToFidu;   
     uint256 public maxSlippageFiduToWant;     
     uint256 public maxSingleInvest;
+    uint256 public tokenId;
     address public tradeFactory;
 
 // ---------------------- CONSTRUCTOR ----------------------
@@ -299,17 +297,13 @@ contract Strategy is BaseStrategy {
         if (!_force && _fiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
             return;
         } else {
-            // Loop through _tokenId's and unstake until we get the amount of _fiduAmount required
-            uint256 _fiduToUnstake = _fiduAmount - FIDU.balanceOf(address(this));
-            while (_fiduToUnstake > 0 && _tokenIdList.length() > 0) {
-                uint256 _stakeId = _tokenIdList.at(0);               
-                if (stakingRewards.stakedBalanceOf(_stakeId) <= _fiduToUnstake) {
-                    stakingRewards.unstake(_stakeId, stakingRewards.stakedBalanceOf(_stakeId));
-                    _tokenIdList.remove(_stakeId);
+            if (tokenId != 0){
+                uint256 _fiduToUnstake = _fiduAmount - FIDU.balanceOf(address(this));          
+                if (stakingRewards.stakedBalanceOf(tokenId) <= _fiduToUnstake) {
+                    stakingRewards.unstake(tokenId, stakingRewards.stakedBalanceOf(tokenId));
                 } else {
-                    stakingRewards.unstake(_stakeId, _fiduToUnstake); 
+                    stakingRewards.unstake(tokenId, _fiduToUnstake); 
                 }
-                _fiduToUnstake = _fiduAmount - FIDU.balanceOf(address(this));
             }
             _checkAllowance(address(curvePool), address(FIDU), _fiduAmount); 
             curvePool.exchange_underlying(0, 1, _fiduAmount, _expectedOut);
@@ -332,16 +326,17 @@ contract Strategy is BaseStrategy {
 
     function _stakeFidu(uint256 _amountToStake) internal {
         _checkAllowance(address(stakingRewards), address(FIDU), _amountToStake);
-        uint256 _tokenId = stakingRewards.stake(_amountToStake, 0);
-        _tokenIdList.add(_tokenId); // each time we stake Fidu, a new _tokenId is created
+        if (tokenId == 0){ // if we don't have a tokenId
+            tokenId = stakingRewards.stake(_amountToStake, 0);
+        } else {
+            stakingRewards.addToStake(tokenId, _amountToStake);
+        }   
     }
 
     function _unstakeAllFidu() internal {
-        for (uint16 i = 0; i < _tokenIdList.length(); i++) {
-            uint256 _stakeId = _tokenIdList.at(i);
-            uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(_stakeId);
-            stakingRewards.unstake(_stakeId, _amountToUnstake);
-            _tokenIdList.remove(_stakeId);
+        if (tokenId != 0){
+            uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(tokenId);
+            stakingRewards.unstake(tokenId, _amountToUnstake);
         }
     }
 
@@ -350,10 +345,8 @@ contract Strategy is BaseStrategy {
     }
 
     function _claimRewards() internal {
-        for (uint16 i = 0; i < _tokenIdList.length(); i++) {
-            uint256 _stakeId = _tokenIdList.at(i);
-            stakingRewards.getReward(_stakeId);
-            
+        if (tokenId != 0){
+            stakingRewards.getReward(tokenId);
         }   
     }
 
@@ -379,8 +372,8 @@ contract Strategy is BaseStrategy {
     function balanceOfAllFidu() public view returns (uint256) {
         uint256 _balanceOfAllFidu;
         uint256 _totalStakedFidu;
-        for (uint16 i = 0; i < _tokenIdList.length(); i++) {
-            _totalStakedFidu = _totalStakedFidu + stakingRewards.stakedBalanceOf(_tokenIdList.at(i));
+        if (tokenId != 0){
+            _totalStakedFidu = _totalStakedFidu + stakingRewards.stakedBalanceOf(tokenId);
         }
         _balanceOfAllFidu = FIDU.balanceOf(address(this)) + _totalStakedFidu;
         return _balanceOfAllFidu;
