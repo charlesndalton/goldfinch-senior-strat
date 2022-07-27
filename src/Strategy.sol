@@ -335,6 +335,7 @@ contract Strategy is BaseStrategy {
 
     function _unstakeAllFidu() internal {
         if (tokenId != 0){
+            _claimRewards(); 
             uint256 _amountToUnstake = stakingRewards.stakedBalanceOf(tokenId);
             stakingRewards.unstake(tokenId, _amountToUnstake);
         }
