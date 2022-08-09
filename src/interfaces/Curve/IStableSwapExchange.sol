@@ -20,5 +20,5 @@ interface IStableSwapExchange {
     function add_liquidity(uint256[2] calldata amounts, uint256 min_mint_amount
     ) external returns (uint256);
 
-      
+    function price_oracle() external view returns (uint256);
 }

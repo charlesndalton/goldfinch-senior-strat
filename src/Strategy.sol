@@ -42,8 +42,8 @@ contract Strategy is BaseStrategy {
     uint256 public maxSingleInvest;
     uint256 public tokenId;
     bool public assessTrueHoldings;
-    bool public tradeFactory;
-
+    address public tradeFactory = address(0);
+    
 // ---------------------- CONSTRUCTOR ----------------------
 
     constructor(
