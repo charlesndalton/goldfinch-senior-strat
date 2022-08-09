@@ -31,19 +31,18 @@ contract Strategy is BaseStrategy {
     IERC20 public constant USDC = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
 
     uint256 internal constant MAX_BIPS = 10_000;
-
+    bool internal forceHarvestTriggerOnce; // only set this to true when we want to trigger our keepers to harvest for us
 
     IStableSwapExchange public curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
     ISeniorPool public seniorPool = ISeniorPool(0x8481a6EbAf5c7DABc3F7e09e44A89531fd31F822);
     IStakingRewards public stakingRewards = IStakingRewards(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3);
 
-    bool internal forceHarvestTriggerOnce; // only set this to true when we want to trigger our keepers to harvest for us
-
     uint256 public maxSlippageWantToFidu;   
     uint256 public maxSlippageFiduToWant;     
     uint256 public maxSingleInvest;
     uint256 public tokenId;
-    address public tradeFactory;
+    bool public assessTrueHoldings;
+    bool public tradeFactory;
 
 // ---------------------- CONSTRUCTOR ----------------------
 
@@ -57,6 +56,7 @@ contract Strategy is BaseStrategy {
         maxSlippageWantToFidu = 30;
         maxSlippageFiduToWant = 30;           
         maxSingleInvest = 10_000 * 1e6;
+        assessTrueHoldings = false;
     }
 
     function name() external view override returns (string memory) {
@@ -65,13 +65,23 @@ contract Strategy is BaseStrategy {
 
 // ---------------------- MAIN ----------------------
 
-     // Calculate the Fidu value based on estimated Curve output
+    // Calculate FIDU value based on Curve's price_oracle
     function estimatedTotalAssets() public view override returns (uint256) {
         uint256 _balanceOfFidu = balanceOfAllFidu();
         if (_balanceOfFidu  == 0) {
             return balanceOfWant();
         } else {
-            return balanceOfWant() + curvePool.get_dy(0, 1, _balanceOfFidu);
+            return balanceOfWant() + _balanceOfFidu / curvePool.price_oracle();
+        }
+    }
+
+    // Calculate FIDU value based on Goldfinch's sharePrice, minus 0.5% withdraw fee
+    function estimatedTotalAssetsAtSharePrice() public view returns (uint256) {
+        uint256 _balanceOfFidu = balanceOfAllFidu();
+        if (_balanceOfFidu  == 0) {
+            return balanceOfWant();
+        } else {
+            return balanceOfWant() + (_balanceOfFidu * seniorPool.sharePrice() * 995 / 1000);
         }
     }
 
@@ -84,42 +94,52 @@ contract Strategy is BaseStrategy {
             uint256 _debtPayment
         )
     {
-        // initial P&L calculations based on Curve pool rate
-        uint256 _totalAssets = estimatedTotalAssets();
         uint256 _totalDebt = vault.strategies(address(this)).totalDebt;
-        if (_totalAssets >= _totalDebt) {
-            _profit = _totalAssets - _totalDebt;
-            _loss = 0;
-        } else {
-            _loss = _totalDebt - _totalAssets;
-            _profit = 0;
-        }
-        _debtPayment = _debtOutstanding;
-
-        // free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
         uint256 _liquidWant = balanceOfWant();
-        uint256 _toFree = _debtOutstanding + _profit;
 
-        // liquidate some of the Want
-        if (_liquidWant < _toFree) {
-            // liquidation can result in a profit as we are using get_dy as an estimate of the amount of Fidu required
-            (uint256 _liquidationProfit, uint256 _liquidationLoss) = withdrawSome(_toFree); 
+        // Case 1 - assessTrueHoldings flag set to true (Curve pool mostly in line)
 
-            // update the P&L to account for liquidation
-            _loss = _loss + _liquidationLoss;
-            _profit = _profit + _liquidationProfit;
-            _liquidWant = balanceOfWant();
-
-            // Case 1 - enough to pay profit (or some) only
-            if (_liquidWant <= _profit){
-                _profit = _liquidWant;
-                _debtPayment = 0;
-
-            // Case 2 - enough to pay _profit and _debtOutstanding
-            // Case 3 - enough to pay for all profit, and some _debtOutstanding
+        if (assessTrueHoldings) {
+            uint256 _totalAssets = estimatedTotalAssets();
+            if (_totalAssets >= _totalDebt) {
+                _profit = _totalAssets - _totalDebt;
+                _loss = 0;
             } else {
-                _debtPayment = Math.min(_liquidWant - _profit, _debtOutstanding);
+                _loss = _totalDebt - _totalAssets;
+                _profit = 0;
             }
+            _debtPayment = _debtOutstanding;
+
+            // free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
+            uint256 _toFree = _debtOutstanding + _profit;
+
+            // liquidate some of the Want
+            if (_liquidWant < _toFree) {
+                // liquidation could result in a profit
+                (uint256 _liquidationProfit, uint256 _liquidationLoss) = withdrawSome(_toFree); 
+
+                // update the P&L to account for liquidation
+                _loss = _loss + _liquidationLoss;
+                _profit = _profit + _liquidationProfit;
+                _liquidWant = balanceOfWant();
+
+                // enough to pay profit (partial or full) only
+                if (_liquidWant <= _profit){
+                    _profit = _liquidWant;
+                    _debtPayment = 0;
+
+                // enough to pay for all profit and _debtOutstanding (partial or full)
+                } else {
+                    _debtPayment = Math.min(_liquidWant - _profit, _debtOutstanding);
+                }
+            }
+
+        // Case 2 - assessTrueHoldings flag set to false (Curve pool out of line)
+        // only consider loose want (GFI rewards sold via cowswap) as profit  
+
+        } else {
+            _profit = balanceOfWant();
+            _debtPayment = 0;
         }
         if (_loss > _profit) {
             _loss = _loss - _profit;
@@ -150,8 +170,8 @@ contract Strategy is BaseStrategy {
     {
         uint256 _liquidWant = balanceOfWant();
         if (_liquidWant < _amountNeeded) {
-            uint256 _fiduToSwap = Math.min((curvePool.get_dy(1, 0, _amountNeeded)), balanceOfAllFidu());
-            _swapFiduToWant(_fiduToSwap, true); // _force set to true, as we skip slippage check for withdraw and emergencyShutdown
+            uint256 _fiduToSwap = Math.min(_amountNeeded * curvePool.price_oracle(), balanceOfAllFidu());
+            _swapFiduToWant(_fiduToSwap);
         } else {
              return (_amountNeeded, 0);
         }
@@ -169,8 +189,8 @@ contract Strategy is BaseStrategy {
         returns (uint256 _liquidationProfit, uint256 _liquidationLoss)
     {
         uint256 _estimatedTotalAssetsBefore = estimatedTotalAssets();
-        uint256 _fiduToSwap = (curvePool.get_dy(1, 0, _amountNeeded));
-        _swapFiduToWant(_fiduToSwap, false);
+        uint256 _fiduToSwap = (_amountNeeded * curvePool.price_oracle());
+        _swapFiduToWant(_fiduToSwap);
         uint256 _estimatedTotalAssetsAfter = estimatedTotalAssets();
         if (_estimatedTotalAssetsAfter >= _estimatedTotalAssetsBefore) {
             return (_estimatedTotalAssetsAfter - _estimatedTotalAssetsBefore, 0);
@@ -180,7 +200,7 @@ contract Strategy is BaseStrategy {
     }
 
     function liquidateAllPositions() internal override returns (uint256) {
-        _swapFiduToWant(balanceOfAllFidu(), true);
+        _swapFiduToWant(balanceOfAllFidu());
         return balanceOfWant();
     }
 
@@ -210,8 +230,12 @@ contract Strategy is BaseStrategy {
     }
     
 // ---------------------- MANAGEMENT FUNCTIONS ----------------------
-    function swapFiduToWant(uint256 FiduAmount, bool force) external onlyVaultManagers {
-        _swapFiduToWant(FiduAmount, force);
+    function swapFiduToWant(uint256 fiduAmount) external onlyVaultManagers {
+        _swapFiduToWant(fiduAmount);
+    }
+
+    function swapWantToFidu(uint256 wantAmount) external onlyVaultManagers {
+        _swapWantToFidu(wantAmount);
     }
 
     function setMaxSlippageWantToFidu(uint256 _maxSlippageWantToFidu) external onlyVaultManagers {
@@ -224,6 +248,10 @@ contract Strategy is BaseStrategy {
 
     function setMaxSingleInvest(uint256 _maxSingleInvest) external onlyVaultManagers {
         maxSingleInvest = _maxSingleInvest;
+    }
+
+    function setAssessTrueHoldings(bool _assessTrueHoldings) external onlyVaultManagers {
+        assessTrueHoldings = _assessTrueHoldings;
     }
 
 // ---------------------- YSWAPS FUNCTIONS ----------------------
@@ -290,11 +318,11 @@ contract Strategy is BaseStrategy {
     }
 
 // ---------------------- HELPER AND UTILITY FUNCTIONS ----------------------
-    function _swapFiduToWant(uint256 _fiduAmount, bool _force) internal {
-        uint256 _fiduValueInWant = (_fiduAmount * seniorPool.sharePrice()) / 1e30;
-        uint256 _expectedOut = curvePool.get_dy(0, 1, _fiduAmount); 
+    function _swapFiduToWant(uint256 _fiduAmount) internal {
+        uint256 _fiduValueInWant = (_fiduAmount * seniorPool.sharePrice() * 995 / 1000) / 1e30;
+        uint256 _expectedOut = (_fiduAmount / curvePool.price_oracle()); 
         uint256 _allowedSlippageLoss = (_fiduValueInWant * maxSlippageFiduToWant) / MAX_BIPS;
-        if (!_force && _fiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
+        if (_fiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
             return;
         } else {
             if (tokenId != 0){
@@ -309,10 +337,10 @@ contract Strategy is BaseStrategy {
             curvePool.exchange_underlying(0, 1, _fiduAmount, _expectedOut);
         }
     }
-    
+
     function _swapWantToFidu(uint256 _amount) internal {
-        uint256 _expectedOut = curvePool.get_dy(1, 0, _amount);
-        uint256 _expectedValueOut = (_expectedOut * seniorPool.sharePrice()) / 1e18;
+        uint256 _expectedOut = (_amount * curvePool.price_oracle());
+        uint256 _expectedValueOut = (_expectedOut * seniorPool.sharePrice() * 995 / 1000) / 1e18;
         uint256 _allowedSlippageLoss = (_amount * maxSlippageWantToFidu) / MAX_BIPS;
         if (_amount - _allowedSlippageLoss > _expectedValueOut) { 
             return;
@@ -378,5 +406,11 @@ contract Strategy is BaseStrategy {
         }
         _balanceOfAllFidu = FIDU.balanceOf(address(this)) + _totalStakedFidu;
         return _balanceOfAllFidu;
+    }
+
+    function claimableRewards() public view returns (uint256) {
+        uint256 _claimableRewards;
+        _claimableRewards = stakingRewards.optimisticClaimable(tokenId);
+        return _claimableRewards;
     }
 }
