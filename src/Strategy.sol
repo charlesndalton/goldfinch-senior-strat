@@ -2,7 +2,6 @@
 
 pragma solidity ^0.8.12;
 pragma experimental ABIEncoderV2;
-import "forge-std/console2.sol"; // TODO: remove
 import {BaseStrategy, StrategyParams} from "@yearnvaults/contracts/BaseStrategy.sol";
 import {IERC20Metadata} from "@yearnvaults/contracts/yToken.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
@@ -41,7 +40,7 @@ contract Strategy is BaseStrategy {
     uint256 public maxSlippageFiduToWant;     
     uint256 public tokenId;
     bool public assessTrueHoldings;
-    address public tradeFactory = address(0);
+    address public tradeFactory;
     
 // ---------------------- CONSTRUCTOR ----------------------
 
