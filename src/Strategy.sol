@@ -313,9 +313,8 @@ contract Strategy is BaseStrategy {
 // ---------------------- HELPER AND UTILITY FUNCTIONS ----------------------
     function _swapFiduToWant(uint256 _fiduAmount) internal {
         uint256 _fiduValueInWant = (_fiduAmount * seniorPool.sharePrice() * 995 / 1000) / 1e30;
-        uint256 _expectedOut = curvePool.get_dy(0, 1, _fiduAmount); 
-        uint256 _allowedSlippageLoss = (_fiduValueInWant * maxSlippageFiduToWant) / MAX_BIPS;
-        if (_fiduValueInWant - _allowedSlippageLoss > _expectedOut) { 
+        uint256 _minWantOut = _fiduAmount / curvePool.price_oracle() * 1e6 * (MAX_BIPS - maxSlippageWantToFidu) / MAX_BIPS;       
+        if (_minWantOut < _fiduValueInWant) { 
             return;
         } else {
             if (tokenId != 0){
@@ -327,20 +326,19 @@ contract Strategy is BaseStrategy {
                 }
             }
             _checkAllowance(address(curvePool), address(FIDU), _fiduAmount); 
-            curvePool.exchange_underlying(0, 1, _fiduAmount, _expectedOut);
+            curvePool.exchange_underlying(0, 1, _fiduAmount, _minWantOut);
         }
     }
 
     function _swapWantToFidu(uint256 _amount) internal {
-        uint256 _expectedFiduOut = curvePool.get_dy(1, 0, _amount);
-        uint256 _expectedValueOut = (_expectedFiduOut * seniorPool.sharePrice() * 995 / 1000) / 1e18;
-        uint256 _allowedSlippageLoss = (_amount * maxSlippageWantToFidu) / MAX_BIPS;
-        if (_amount - _allowedSlippageLoss > _expectedValueOut / 1e12) { 
+        uint256 _minFiduOut = (_amount * curvePool.price_oracle() * (MAX_BIPS - maxSlippageWantToFidu) / MAX_BIPS) / 1e6;
+        uint256 _minValueInWantOut = (_minFiduOut * seniorPool.sharePrice() * 995 / 1000) / 1e30;
+        if (_minValueInWantOut < _amount) {
             return;
         } else {
             if (_amount > 0){      
                 _checkAllowance(address(curvePool), address(want), _amount); 
-                curvePool.exchange_underlying(1, 0, _amount, _expectedFiduOut); 
+                curvePool.exchange_underlying(1, 0, _amount, _minFiduOut); 
             }
         }
     }
