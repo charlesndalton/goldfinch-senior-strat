@@ -100,10 +100,8 @@ contract Strategy is BaseStrategy {
             uint256 _totalAssets = estimatedTotalAssets();
             if (_totalAssets >= _totalDebt) {
                 _profit = _totalAssets - _totalDebt;
-                _loss = 0;
             } else {
                 _loss = _totalDebt - _totalAssets;
-                _profit = 0;
             }
             _debtPayment = _debtOutstanding;
 
