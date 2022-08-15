@@ -18,6 +18,7 @@ import "./interfaces/Curve/IStableSwapExchange.sol";
 import "./interfaces/Goldfinch/ISeniorPool.sol";
 import "./interfaces/Goldfinch/IStakingRewards.sol";
 import "./interfaces/ySwap/ITradeFactory.sol";
+import "./interfaces/Uniswap/IUniV3.sol";
 
 contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
@@ -28,6 +29,10 @@ contract Strategy is BaseStrategy {
     IERC20 public constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
     IERC20 public constant GFI = IERC20(0xdab396cCF3d84Cf2D07C4454e10C8A6F5b008D2b);
     IERC20 public constant USDC = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+    IERC20 public constant WETH = IERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+
+    uint24 internal constant uniPoolFee = 3_000; // this is equal to 0.3%
+    address public constant uniswapv3 = address(0xE592427A0AEce92De3Edee1F18E0157C05861564);
 
     uint256 internal constant MAX_BIPS = 10_000;
     bool internal forceHarvestTriggerOnce; // only set this to true when we want to trigger our keepers to harvest for us
@@ -37,7 +42,8 @@ contract Strategy is BaseStrategy {
     IStakingRewards public stakingRewards = IStakingRewards(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3);
 
     uint256 public maxSlippageWantToFidu;   
-    uint256 public maxSlippageFiduToWant;     
+    uint256 public maxSlippageFiduToWant;
+    uint256 public maxSingleGFISwap;     
     uint256 public tokenId;
     bool public assessTrueHoldings;
     address public tradeFactory;
@@ -52,7 +58,8 @@ contract Strategy is BaseStrategy {
 
     function _initializeStrat() internal {
         maxSlippageWantToFidu = 30;
-        maxSlippageFiduToWant = 30;           
+        maxSlippageFiduToWant = 30;  
+        maxSingleGFISwap = 500;         
         assessTrueHoldings = false;
     }
 
@@ -93,7 +100,9 @@ contract Strategy is BaseStrategy {
         )
     {
         uint256 _totalDebt = vault.strategies(address(this)).totalDebt;
-        uint256 _liquidWant = balanceOfWant();
+        uint256 _initialBalanceOfWant = balanceOfWant();
+        _claimRewards(); 
+        _sellRewardsOnUniswap();
 
         // Case 1 - assessTrueHoldings flag set to true (Curve pool mostly in line)
         if (assessTrueHoldings) {
@@ -108,21 +117,22 @@ contract Strategy is BaseStrategy {
             // free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
             uint256 _toFree = _debtOutstanding + _profit;
             // liquidate some of the Want
-            if (_liquidWant < _toFree) {
+            if (_initialBalanceOfWant  < _toFree) {
                 // liquidation could result in a profit
                 (uint256 _liquidationProfit, uint256 _liquidationLoss) = withdrawSome(_toFree); 
 
                 // update the P&L to account for liquidation
                 _loss = _loss + _liquidationLoss;
                 _profit = _profit + _liquidationProfit;
-                _liquidWant = balanceOfWant();
             }
 
         // Case 2 - assessTrueHoldings flag set to false (Curve pool out of line)
-        // only consider loose want (GFI rewards sold via cowswap) as profit  
+        // in this case we just look for delta in balanceOfWant after selling rewards
         } else {
-            _profit = balanceOfWant();
+            _profit = Math.min(0, balanceOfWant() - _initialBalanceOfWant);
         }
+
+        uint256 _liquidWant = balanceOfWant();
 
         // calculate final p&l and _debtPayment
 
@@ -145,8 +155,7 @@ contract Strategy is BaseStrategy {
         }  
     }
 
-    function adjustPosition(uint256 _debtOutstanding) internal override { 
-        _claimRewards(); 
+    function adjustPosition(uint256 _debtOutstanding) internal override {
         uint256 _liquidWant = balanceOfWant(); 
         if (_liquidWant > _debtOutstanding) {
             uint256 _amountToInvest =  _liquidWant - _debtOutstanding;
@@ -368,6 +377,29 @@ contract Strategy is BaseStrategy {
         if (tokenId != 0){
             stakingRewards.getReward(tokenId);
         }   
+    }
+
+    function _sellRewardsOnUniswap() internal { 
+        uint256 _gfiToSwap = Math.min(maxSingleGFISwap, GFI.balanceOf(address(this)));
+                if (_gfiToSwap > 1e17) { // don't want to swap dust or we might revert
+                    _checkAllowance(address(uniswapv3), address(GFI), _gfiToSwap);
+                    IUniV3(uniswapv3).exactInput(
+                        // hop from GFI/WETH(0.3%) then WETH/USDC (0.3%)
+                        IUniV3.ExactInputParams(
+                            abi.encodePacked(
+                                address(GFI),
+                                uint24(uniPoolFee),
+                                address(WETH),
+                                uint24(uniPoolFee),
+                                address(USDC)
+                            ),
+                            address(this),
+                            block.timestamp,
+                            _gfiToSwap,
+                            uint256(1)
+                        )
+                    );
+                }
     }
 
     function manuallyClaimRewards() external onlyVaultManagers {

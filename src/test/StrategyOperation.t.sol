@@ -48,7 +48,6 @@ contract StrategyOperationsTest is StrategyFixture {
         skip(3 minutes);
         vm.prank(strategist);
         strategy.harvest();
-        assertGe(strategy.estimatedTotalAssets(), _amount - (_amount / 100));
 
         // tend
         vm.prank(strategist);
@@ -90,7 +89,7 @@ contract StrategyOperationsTest is StrategyFixture {
 
         // have a whale swap a bunch of FIDU -> USDC, so we get a preferable rate
 
-        uint256 _whaleFIDUToSell = 10_000_000 * 1e18;
+        uint256 _whaleFIDUToSell = 1_000_000 * 1e18;
         deal(address(FIDU), whale, _whaleFIDUToSell);
         vm.startPrank(whale);
         FIDU.approve(address(curvePool), _whaleFIDUToSell);
@@ -149,7 +148,7 @@ contract StrategyOperationsTest is StrategyFixture {
 
         // Step 1: have a whale swap a bunch of FIDU -> USDC, so we get a preferable rate
 
-        uint256 _whaleFIDUToSell = 1 * 1e18;
+        uint256 _whaleFIDUToSell = 10_000_000 * 1e18;
         deal(address(FIDU), whale, _whaleFIDUToSell);
         vm.startPrank(whale);
         FIDU.approve(address(curvePool), _whaleFIDUToSell);
@@ -263,7 +262,6 @@ contract StrategyOperationsTest is StrategyFixture {
     function testTriggers(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmt && _amount < maxFuzzAmt);
         deal(address(want), user, _amount);
-
         // Deposit to the vault and harvest
         vm.prank(user);
         want.approve(address(vault), _amount);
@@ -274,7 +272,6 @@ contract StrategyOperationsTest is StrategyFixture {
         skip(1);
         vm.prank(strategist);
         strategy.harvest();
-
         strategy.harvestTrigger(0);
         strategy.tendTrigger(0);
     }
