@@ -31,7 +31,8 @@ contract Strategy is BaseStrategy {
     IERC20 public constant USDC = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
     IERC20 public constant WETH = IERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
-    uint24 internal constant uniPoolFee = 3_000; // this is equal to 0.3%
+    uint24 internal constant uniPoolFeeGFI = 3_000; // this is equal to 0.3%
+    uint24 internal constant uniPoolFeeWETH = 500; // this is equal to 0.05%    
     address public constant uniswapv3 = address(0xE592427A0AEce92De3Edee1F18E0157C05861564);
 
     uint256 internal constant MAX_BIPS = 10_000;
@@ -75,7 +76,7 @@ contract Strategy is BaseStrategy {
         if (_balanceOfFidu  == 0) {
             return balanceOfWant();
         } else {      
-            return balanceOfWant() + (_balanceOfFidu / curvePool.price_oracle() * 1e6);
+            return balanceOfWant() + (_balanceOfFidu * 1e6 / curvePool.price_oracle());
         }
     }
 
@@ -117,9 +118,9 @@ contract Strategy is BaseStrategy {
             // free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
             uint256 _toFree = _debtOutstanding + _profit;
             // liquidate some of the Want
-            if (_initialBalanceOfWant  < _toFree) {
+            if (balanceOfWant() < _toFree) {
                 // liquidation could result in a profit
-                (uint256 _liquidationProfit, uint256 _liquidationLoss) = withdrawSome(_toFree); 
+                (uint256 _liquidationProfit, uint256 _liquidationLoss) = withdrawSome(_toFree - balanceOfWant()); 
 
                 // update the P&L to account for liquidation
                 _loss = _loss + _liquidationLoss;
@@ -165,27 +166,6 @@ contract Strategy is BaseStrategy {
         if (unstakedBalance > 0) {
             _stakeFidu(unstakedBalance);
         }        
-    }
-
-    function liquidatePosition(uint256 _amountNeeded)
-        internal
-        override
-        returns (uint256 _liquidatedAmount, uint256 _loss)
-    {
-        uint256 _liquidWant = balanceOfWant();
-        if (_liquidWant < _amountNeeded) {
-            uint256 _fiduToSwap = Math.min(_amountNeeded * curvePool.price_oracle() / 1e6, balanceOfAllFidu());
-            _swapFiduToWant(_fiduToSwap);
-        } else {
-             return (_amountNeeded, 0);
-        }
-        _liquidWant = balanceOfWant();
-        if (_liquidWant >= _amountNeeded) {
-            _liquidatedAmount = _amountNeeded;
-        } else {
-            _liquidatedAmount = _liquidWant;
-            _loss = _amountNeeded - _liquidWant;
-        }
     }
 
     function withdrawSome(uint256 _amountNeeded)
@@ -326,7 +306,7 @@ contract Strategy is BaseStrategy {
             return;
         } else {
             if (tokenId != 0){
-                uint256 _fiduToUnstake = _fiduAmount - FIDU.balanceOf(address(this));          
+                uint256 _fiduToUnstake = Math.min(0,_fiduAmount - FIDU.balanceOf(address(this)));          
                 if (stakingRewards.stakedBalanceOf(tokenId) <= _fiduToUnstake) {
                     stakingRewards.unstake(tokenId, stakingRewards.stakedBalanceOf(tokenId));
                 } else {
@@ -384,13 +364,13 @@ contract Strategy is BaseStrategy {
                 if (_gfiToSwap > 1e17) { // don't want to swap dust or we might revert
                     _checkAllowance(address(uniswapv3), address(GFI), _gfiToSwap);
                     IUniV3(uniswapv3).exactInput(
-                        // hop from GFI/WETH(0.3%) then WETH/USDC (0.3%)
+                        // hop from GFI/WETH(0.3%) then WETH/USDC (0.05%)
                         IUniV3.ExactInputParams(
                             abi.encodePacked(
                                 address(GFI),
-                                uint24(uniPoolFee),
+                                uint24(uniPoolFeeGFI),
                                 address(WETH),
-                                uint24(uniPoolFee),
+                                uint24(uniPoolFeeWETH),
                                 address(USDC)
                             ),
                             address(this),
