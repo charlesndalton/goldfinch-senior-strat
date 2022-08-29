@@ -11,6 +11,8 @@ import {
 import {IERC20Metadata} from "@yearnvaults/contracts/yToken.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
+import "forge-std/console2.sol"; // TODO: remove
+
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from
@@ -335,7 +337,7 @@ contract Strategy is BaseStrategy {
         } else {
             if (tokenId != 0) {
                 uint256 _fiduToUnstake =
-                    Math.min(0,_fiduAmount - FIDU.balanceOf(address(this)));
+                    Math.max(0,_fiduAmount - FIDU.balanceOf(address(this)));
                 if (stakingRewards.stakedBalanceOf(tokenId) <= _fiduToUnstake) {
                     stakingRewards.unstake(tokenId, stakingRewards.stakedBalanceOf(tokenId));
                 } else {

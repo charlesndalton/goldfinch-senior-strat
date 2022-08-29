@@ -5,15 +5,6 @@ import "forge-std/console2.sol";
 
 import {StrategyFixture} from "./utils/StrategyFixture.sol";
 
-// for whale testing
-import "../interfaces/Curve/IStableSwapExchange.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
-IStableSwapExchange constant curvePool =
-    IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
-IERC20 constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
-
-//
 contract StrategyOperationsTest is StrategyFixture {
     // setup is run on before each test
     function setUp() public override {
@@ -55,6 +46,9 @@ contract StrategyOperationsTest is StrategyFixture {
         vm.prank(strategist);
         strategy.tend();
 
+        // simulate whale swap on Curve to withdraw at favorable rate
+        simulateWhaleSellUSDC(10_000_000 * 1e6);
+
         vm.startPrank(user);
         vault.withdraw(vault.balanceOf(user), user, 600);
         vm.stopPrank();
@@ -89,16 +83,10 @@ contract StrategyOperationsTest is StrategyFixture {
         vm.assume(_amount > minFuzzAmt && _amount < maxFuzzAmt);
         deal(address(want), user, _amount);
 
-        // have a whale swap a bunch of FIDU -> USDC, so we get a preferable rate
+        // Step 1: have a whale swap a bunch of FIDU -> USDC, so we get a preferable rate
+        simulateWhaleSellFIDU(10_000_000 * 1e18);
 
-        uint256 _whaleFIDUToSell = 1_000_000 * 1e18;
-        deal(address(FIDU), whale, _whaleFIDUToSell);
-        vm.startPrank(whale);
-        FIDU.approve(address(curvePool), _whaleFIDUToSell);
-        curvePool.exchange_underlying(0, 1, _whaleFIDUToSell, 0);
-        vm.stopPrank();
-
-        // Deposit to the vault
+        // Step 2: deposit to strat and harvest, so we can scoop up some of that FIDU
         vm.prank(user);
         want.approve(address(vault), _amount);
         vm.prank(user);
@@ -107,13 +95,8 @@ contract StrategyOperationsTest is StrategyFixture {
 
         uint256 beforePps = vault.pricePerShare();
 
-        // have whale swap his USDC back to FIDU, so we should be able to declare profits
-
-        uint256 _whaleUSDCToSell = want.balanceOf(whale);
-        vm.startPrank(whale);
-        want.approve(address(curvePool), _whaleUSDCToSell);
-        curvePool.exchange_underlying(1, 0, _whaleUSDCToSell, 0);
-        vm.stopPrank();
+        // Step 3: have whale swap his USDC back to FIDU, so we should be able to declare profits
+        simulateWhaleSellUSDC(want.balanceOf(whale));
 
         // Harvest 1: Send funds through the strategy
         console2.log("Send funds through the strategy");
@@ -137,9 +120,10 @@ contract StrategyOperationsTest is StrategyFixture {
 
         // Testing GFI rewards
         assertGe(GFI.balanceOf(address(strategy)),1);
-        console2.log("GFI reward obtained:", GFI.balanceOf(address(strategy))); // uint256 profit = want.balanceOf(address(vault));
-        // assertGe(vault.pricePerShare(), beforePps);
-    // Check if profitable
+        console2.log("GFI reward obtained:", GFI.balanceOf(address(strategy))); 
+        uint256 profit = want.balanceOf(address(vault));
+        assertGe(profit, 0); // Check if profitable
+        assertGe(vault.pricePerShare(), beforePps);
     }
 
     function testDebtPaymentWithProfit(uint256 _amount) public {
@@ -147,16 +131,9 @@ contract StrategyOperationsTest is StrategyFixture {
         deal(address(want), user, _amount);
 
         // Step 1: have a whale swap a bunch of FIDU -> USDC, so we get a preferable rate
-
-        uint256 _whaleFIDUToSell = 10_000_000 * 1e18;
-        deal(address(FIDU), whale, _whaleFIDUToSell);
-        vm.startPrank(whale);
-        FIDU.approve(address(curvePool), _whaleFIDUToSell);
-        curvePool.exchange_underlying(0, 1, _whaleFIDUToSell, 0);
-        vm.stopPrank();
+        simulateWhaleSellFIDU(10_000_000 * 1e18);
 
         // Step 2: deposit to strat and harvest, so we can scoop up some of that FIDU
-
         vm.startPrank(user);
         want.approve(address(vault), _amount);
         vault.deposit(_amount);
@@ -167,12 +144,7 @@ contract StrategyOperationsTest is StrategyFixture {
         strategy.harvest();
 
         // Step 3: have whale swap his USDC back to FIDU, so we should be able to declare profits
-
-        uint256 _whaleUSDCToSell = want.balanceOf(whale);
-        vm.startPrank(whale);
-        want.approve(address(curvePool), _whaleUSDCToSell);
-        curvePool.exchange_underlying(1, 0, _whaleUSDCToSell, 0);
-        vm.stopPrank();
+        simulateWhaleSellUSDC(want.balanceOf(whale));
 
         // Step 4: decrease debt ratio before harvesting, then harvest profit
 
@@ -195,24 +167,34 @@ contract StrategyOperationsTest is StrategyFixture {
         vm.prank(gov);
         vault.updateStrategyDebtRatio(address(strategy), 5_000);
         skip(1);
+
+        // Simulate whale swap
+        simulateWhaleSellUSDC(10_000_000 * 1e6);
+
         vm.prank(strategist);
         strategy.harvest();
         uint256 half = uint256(_amount / 2);
-        assertRelApproxEq(strategy.estimatedTotalAssets(), half, DELTA);
+        assertGe(strategy.estimatedTotalAssets(), half);
+
+        // Simulate whale swap
+        simulateWhaleSellFIDU(10_000_000 * 1e18);
 
         vm.prank(gov);
         vault.updateStrategyDebtRatio(address(strategy), 10_000);
         skip(1);
         vm.prank(strategist);
         strategy.harvest();
-        assertRelApproxEq(strategy.estimatedTotalAssets(), _amount, DELTA); // TODO: uncomment the following lines.
-        // vm.prank(gov);
-        // vault.updateStrategyDebtRatio(address(strategy), 5_000);
-        // skip(1);
-        // vm.prank(strategist);
-        // strategy.harvest();
-        // assertRelApproxEq(strategy.estimatedTotalAssets(), half, DELTA);
-    // In order to pass these tests, you will need to implement prepareReturn.
+        assertGe(strategy.estimatedTotalAssets(), _amount); 
+
+        // Simulate whale swap
+        simulateWhaleSellUSDC(want.balanceOf(whale));
+
+        vm.prank(gov);
+        vault.updateStrategyDebtRatio(address(strategy), 5_000);
+        skip(1);
+        vm.prank(strategist);
+        strategy.harvest();
+        assertGe(strategy.estimatedTotalAssets(), half);
     }
 
     function testSweep(uint256 _amount) public {
@@ -233,12 +215,6 @@ contract StrategyOperationsTest is StrategyFixture {
         vm.prank(gov);
         vm.expectRevert("!shares");
         strategy.sweep(address(vault));
-
-        // TODO: If you add protected tokens to the strategy.
-        // Protected token doesn't work
-        // vm.prank(gov);
-        // vm.expectRevert("!protected");
-        // strategy.sweep(strategy.protectedToken());
 
         uint256 beforeBalance = weth.balanceOf(gov);
         uint256 wethAmount = 1 ether;

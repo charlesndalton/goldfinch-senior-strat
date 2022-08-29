@@ -19,6 +19,16 @@ import {ITradeFactory} from "../../interfaces/ySwap/ITradeFactory.sol";
 // the project root.
 string constant vaultArtifact = "artifacts/Vault.json";
 
+// for whale testing
+import "../../interfaces/Curve/IStableSwapExchange.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+IStableSwapExchange constant curvePool =
+    IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
+IERC20 constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
+IERC20 constant USDC = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+//
+
 // Base fixture deploying Vault
 contract StrategyFixture is ExtendedTest {
     using SafeERC20 for IERC20;
@@ -212,4 +222,23 @@ contract StrategyFixture is ExtendedTest {
         tokenPrices["USDC"] = 1;
         tokenPrices["DAI"] = 1;
     }
+
+    function simulateWhaleSellUSDC(uint256 _usdcAmount) public {
+        uint256 _whaleUSDCToSell = _usdcAmount;
+        deal(address(USDC), whale, _whaleUSDCToSell);
+        vm.startPrank(whale);
+        USDC.approve(address(curvePool), _whaleUSDCToSell);
+        curvePool.exchange_underlying(1, 0, _whaleUSDCToSell, 0);
+        vm.stopPrank();
+    }
+
+    function simulateWhaleSellFIDU(uint256 _fiduAmount) public {
+        uint256 _whaleFIDUToSell = _fiduAmount;
+        deal(address(FIDU), whale, _whaleFIDUToSell);
+        vm.startPrank(whale);
+        FIDU.approve(address(curvePool), _whaleFIDUToSell);
+        curvePool.exchange_underlying(0, 1, _whaleFIDUToSell, 0);
+        vm.stopPrank();
+    }
+
 }
