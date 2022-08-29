@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.12;
+
 pragma abicoder v2;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeERC20} from
+    "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ExtendedTest} from "./ExtendedTest.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {IVault} from "../../interfaces/Vault.sol";
@@ -25,7 +27,7 @@ contract StrategyFixture is ExtendedTest {
     Strategy public strategy;
     IERC20 public weth;
     IERC20 public want;
-    IERC20 public GFI; 
+    IERC20 public GFI;
 
     mapping(string => address) public tokenAddrs;
     mapping(string => uint256) public tokenPrices;
@@ -39,8 +41,10 @@ contract StrategyFixture is ExtendedTest {
     address public strategist = address(6);
     address public keeper = address(7);
 
-    ITradeFactory public constant tradeFactory = ITradeFactory(0x7BAF843e06095f68F4990Ca50161C2C4E4e01ec6);
-    address public constant yMechSafe = 0x2C01B4AD51a67E2d8F02208F54dF9aC4c0B778B6;
+    ITradeFactory public constant tradeFactory =
+        ITradeFactory(0x7BAF843e06095f68F4990Ca50161C2C4E4e01ec6);
+    address public constant yMechSafe =
+        0x2C01B4AD51a67E2d8F02208F54dF9aC4c0B778B6;
 
     uint256 public minFuzzAmt;
     // @dev maximum amount of want tokens deposited based on @maxDollarNotional
@@ -52,7 +56,7 @@ contract StrategyFixture is ExtendedTest {
     // @dev used for non-fuzz tests to test large amounts
     uint256 public bigAmount;
     // Used for integer approximation
-    uint256 public constant DELTA = 10**1;
+    uint256 public constant DELTA = 10 ** 1;
 
     function setUp() public virtual {
         _setTokenPrices();
@@ -78,13 +82,11 @@ contract StrategyFixture is ExtendedTest {
         vault = IVault(_vault);
         strategy = Strategy(_strategy);
 
-        minFuzzAmt = 10**vault.decimals() * 10000; // USDC 6 decimals
+        minFuzzAmt = 10 ** vault.decimals() * 10000; // USDC 6 decimals
         maxFuzzAmt =
-            uint256(maxDollarNotional / tokenPrices[token]) *
-            10**vault.decimals();
+            uint256(maxDollarNotional / tokenPrices[token]) * 10 ** vault.decimals();
         bigAmount =
-            uint256(bigDollarNotional / tokenPrices[token]) *
-            10**vault.decimals();
+            uint256(bigDollarNotional / tokenPrices[token]) * 10 ** vault.decimals();
 
         // add more labels to make your traces readable
         vm.label(address(vault), "Vault");
@@ -103,9 +105,7 @@ contract StrategyFixture is ExtendedTest {
         vm.label(address(0xdab396cCF3d84Cf2D07C4454e10C8A6F5b008D2b), "GFI Token");
         vm.label(address(0xFD6FF39DA508d281C2d255e9bBBfAb34B6be60c3), "Staking rewards");
         vm.label(address(0x80aa1a80a30055DAA084E599836532F3e58c95E2), "Curve Pool - Swap Fidu");
-
-
-        // do here additional setup
+    // do here additional setup
     }
 
     // Deploys a vault
@@ -117,7 +117,10 @@ contract StrategyFixture is ExtendedTest {
         string memory _symbol,
         address _guardian,
         address _management
-    ) public returns (address) {
+    )
+        public
+        returns (address)
+    {
         vm.prank(_gov);
         address _vaultAddress = deployCode(vaultArtifact);
         IVault _vault = IVault(_vaultAddress);
@@ -147,9 +150,6 @@ contract StrategyFixture is ExtendedTest {
         tradeFactory.grantRole(tradeFactory.STRATEGY(), address(_strategy));
         vm.stopPrank();
 
-        vm.prank(gov);
-        _strategy.setTradeFactory(address(tradeFactory));
-
         return address(_strategy);
     }
 
@@ -164,7 +164,10 @@ contract StrategyFixture is ExtendedTest {
         address _management,
         address _keeper,
         address _strategist
-    ) public returns (address _vaultAddr, address _strategyAddr) {
+    )
+        public
+        returns (address _vaultAddr, address _strategyAddr)
+    {
         _vaultAddr = deployVault(
             _token,
             _gov,

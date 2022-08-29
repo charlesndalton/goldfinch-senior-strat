@@ -3,6 +3,7 @@ pragma solidity ^0.8.12;
 
 import {StrategyFixture} from "./utils/StrategyFixture.sol";
 import "forge-std/console2.sol";
+
 contract StrategyShutdownTest is StrategyFixture {
     function setUp() public override {
         super.setUp();

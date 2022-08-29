@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.12;
+
 import "forge-std/console2.sol";
 
 import {StrategyFixture} from "./utils/StrategyFixture.sol";
 
-
 // for whale testing
 import "../interfaces/Curve/IStableSwapExchange.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-IStableSwapExchange constant curvePool = IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
-IERC20 constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
-//
 
+IStableSwapExchange constant curvePool =
+    IStableSwapExchange(0x80aa1a80a30055DAA084E599836532F3e58c95E2);
+IERC20 constant FIDU = IERC20(0x6a445E9F40e0b97c92d0b8a3366cEF1d67F700BF);
+
+//
 contract StrategyOperationsTest is StrategyFixture {
     // setup is run on before each test
     function setUp() public override {
@@ -111,7 +113,7 @@ contract StrategyOperationsTest is StrategyFixture {
         vm.startPrank(whale);
         want.approve(address(curvePool), _whaleUSDCToSell);
         curvePool.exchange_underlying(1, 0, _whaleUSDCToSell, 0);
-        vm.stopPrank(); 
+        vm.stopPrank();
 
         // Harvest 1: Send funds through the strategy
         console2.log("Send funds through the strategy");
@@ -132,14 +134,12 @@ contract StrategyOperationsTest is StrategyFixture {
         skip(60*24*100); // skip 10 days
         vm.prank(strategist);
         strategy.harvest();
-        
+
         // Testing GFI rewards
         assertGe(GFI.balanceOf(address(strategy)),1);
-        console2.log("GFI reward obtained:", GFI.balanceOf(address(strategy)));
-
-        // Check if profitable
-        // uint256 profit = want.balanceOf(address(vault));
+        console2.log("GFI reward obtained:", GFI.balanceOf(address(strategy))); // uint256 profit = want.balanceOf(address(vault));
         // assertGe(vault.pricePerShare(), beforePps);
+    // Check if profitable
     }
 
     function testDebtPaymentWithProfit(uint256 _amount) public {
@@ -161,7 +161,7 @@ contract StrategyOperationsTest is StrategyFixture {
         want.approve(address(vault), _amount);
         vault.deposit(_amount);
         vm.stopPrank();
-        
+
         skip(1);
         vm.prank(strategist);
         strategy.harvest();
@@ -172,7 +172,7 @@ contract StrategyOperationsTest is StrategyFixture {
         vm.startPrank(whale);
         want.approve(address(curvePool), _whaleUSDCToSell);
         curvePool.exchange_underlying(1, 0, _whaleUSDCToSell, 0);
-        vm.stopPrank(); 
+        vm.stopPrank();
 
         // Step 4: decrease debt ratio before harvesting, then harvest profit
 
@@ -181,7 +181,6 @@ contract StrategyOperationsTest is StrategyFixture {
         skip(1);
         vm.prank(strategist);
         strategy.harvest();
-
     }
 
     function testChangeDebt(uint256 _amount) public {
@@ -206,16 +205,14 @@ contract StrategyOperationsTest is StrategyFixture {
         skip(1);
         vm.prank(strategist);
         strategy.harvest();
-        assertRelApproxEq(strategy.estimatedTotalAssets(), _amount, DELTA);
-
-        // In order to pass these tests, you will need to implement prepareReturn.
-        // TODO: uncomment the following lines.
+        assertRelApproxEq(strategy.estimatedTotalAssets(), _amount, DELTA); // TODO: uncomment the following lines.
         // vm.prank(gov);
         // vault.updateStrategyDebtRatio(address(strategy), 5_000);
         // skip(1);
         // vm.prank(strategist);
         // strategy.harvest();
         // assertRelApproxEq(strategy.estimatedTotalAssets(), half, DELTA);
+    // In order to pass these tests, you will need to implement prepareReturn.
     }
 
     function testSweep(uint256 _amount) public {

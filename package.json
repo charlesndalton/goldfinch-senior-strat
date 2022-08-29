@@ -13,5 +13,8 @@
         "format:check": "prettier --check 'src/**/*.*(sol|json)'",
         "lint": "solhint 'src/**/*.sol'",
         "lint:fix": "solhint --fix 'src/**/*.sol'"
+    },
+    "dependencies": {
+        "format": "^0.2.2"
     }
-  }
+}
