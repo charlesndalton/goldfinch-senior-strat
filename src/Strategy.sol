@@ -266,6 +266,13 @@ contract Strategy is BaseStrategy {
         maxSlippageFiduToWant = _maxSlippageFiduToWant;
     }
 
+    function setAssessTrueHoldings(bool _assessTrueHoldings)
+        external
+        onlyVaultManagers
+    {
+        assessTrueHoldings = _assessTrueHoldings;
+    }
+
     function setMaxSingleGFISwap(uint256 _maxSingleGFISwap)
         external
         onlyVaultManagers
@@ -294,11 +301,6 @@ contract Strategy is BaseStrategy {
 
         // trigger if we want to manually harvest, but only if our gas price is acceptable
         if (forceHarvestTriggerOnce) {
-            return true;
-        }
-
-        // trigger if assessTrueHoldings is true (manual flag)
-        if (assessTrueHoldings) {
             return true;
         }
 
