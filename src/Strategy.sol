@@ -140,7 +140,7 @@ contract Strategy is BaseStrategy {
         // Case 2 - assessTrueHoldings flag set to false (Curve pool out of line)
         // in this case we just look for delta in balanceOfWant after selling rewards
         } else {
-            _profit = Math.max(0, balanceOfWant() - _initialBalanceOfWant);
+            _profit = balanceOfWant() - _initialBalanceOfWant;
         }
 
         uint256 _liquidWant = balanceOfWant();
@@ -264,13 +264,6 @@ contract Strategy is BaseStrategy {
         onlyVaultManagers
     {
         maxSlippageFiduToWant = _maxSlippageFiduToWant;
-    }
-
-    function setAssessTrueHoldings(bool _assessTrueHoldings)
-        external
-        onlyVaultManagers
-    {
-        assessTrueHoldings = _assessTrueHoldings;
     }
 
     function setMaxSingleGFISwap(uint256 _maxSingleGFISwap)
