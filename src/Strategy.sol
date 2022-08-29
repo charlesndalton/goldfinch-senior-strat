@@ -33,7 +33,7 @@ contract Strategy is BaseStrategy {
 
     uint24 internal constant uniPoolFeeGFI = 3_000; // this is equal to 0.3%
     uint24 internal constant uniPoolFeeWETH = 500; // this is equal to 0.05%    
-    address public constant uniswapv3 = address(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+    address public constant uniswapv3 = address(0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45);
 
     uint256 internal constant MAX_BIPS = 10_000;
     bool internal forceHarvestTriggerOnce; // only set this to true when we want to trigger our keepers to harvest for us
