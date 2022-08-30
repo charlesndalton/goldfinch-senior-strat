@@ -206,7 +206,7 @@ contract Strategy is BaseStrategy {
         returns (uint256 _liquidationProfit, uint256 _liquidationLoss)
     {
         uint256 _estimatedTotalAssetsBefore = estimatedTotalAssets();
-        uint256 _fiduToSwap = _amountNeeded * curvePool.price_oracle() / 1e6;
+        uint256 _fiduToSwap = Math.min(_amountNeeded * curvePool.price_oracle() / 1e6, balanceOfAllFidu());
         _swapFiduToWant(_fiduToSwap);
         uint256 _estimatedTotalAssetsAfter = estimatedTotalAssets();
         if (_estimatedTotalAssetsAfter >= _estimatedTotalAssetsBefore) {
