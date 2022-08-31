@@ -197,6 +197,41 @@ contract StrategyOperationsTest is StrategyFixture {
         assertGe(strategy.estimatedTotalAssets(), half);
     }
 
+// trying to reproduce a bug where we try to withdraw more FIDU then we have
+function testSunsetStrat(uint256 _amount) public {
+        vm.assume(_amount > minFuzzAmt && _amount < maxFuzzAmt);
+        deal(address(want), user, _amount);
+
+        // Deposit to the vault and harvest
+        vm.prank(user);
+        want.approve(address(vault), _amount);
+        vm.prank(user);
+        vault.deposit(_amount);
+        vm.prank(gov);
+        vault.updateStrategyDebtRatio(address(strategy), 5_000);
+        skip(1);
+
+        // Simulate whale swap
+        simulateWhaleSellUSDC(10_000_000 * 1e6);
+
+        vm.prank(strategist);
+        strategy.harvest();
+        uint256 half = uint256(_amount / 2);
+        assertGe(strategy.estimatedTotalAssets(), half);
+
+        // set debt ratio to 0, slippage to 100% and harvest
+        vm.prank(gov);
+        vault.updateStrategyDebtRatio(address(strategy), 0);
+
+        vm.prank(gov);
+        strategy.setMaxSlippageFiduToWant(10_000);
+        skip(1);
+
+        vm.prank(strategist);
+        strategy.harvest();
+       
+    }
+
     function testSweep(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmt && _amount < maxFuzzAmt);
         deal(address(want), user, _amount);
