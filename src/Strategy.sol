@@ -103,7 +103,7 @@ contract Strategy is BaseStrategy {
         if (_balanceOfFidu == 0) {
             return balanceOfWant();
         } else {
-            return balanceOfWant() + (_balanceOfFidu * seniorPool.sharePrice() * 995 / 1000);
+            return balanceOfWant() + (_balanceOfFidu * seniorPool.sharePrice() * 995 / 1000) / 1e30;
         }
     }
 
