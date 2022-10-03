@@ -10,9 +10,6 @@ import {
 } from "@yearnvaults/contracts/BaseStrategy.sol";
 import {IERC20Metadata} from "@yearnvaults/contracts/yToken.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
-
-import "forge-std/console2.sol"; // TODO: remove
-
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from
